@@ -1,0 +1,38 @@
+{
+    "name": "nextpoints-dev",
+    "dockerComposeFile": "../docker-compose.yml",
+    // 告诉 devcontainer 附加到docker-compose 中的哪个服务
+    "service": "nextpoints",
+    "workspaceFolder": "/workspace",
+    // 使用 Features 安装常用工具，而不是污染 Dockerfile
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "username": "vscode",
+            "uid": "auto",
+            "gid": "auto",
+            "installZsh": true, // 你还可以配置一些选项
+            "upgradePackages": true
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "esbenp.prettier-vscode",
+                "ms-python.black-formatter",
+                "redigu.git-commit-plugin"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        }
+    },
+    "shutdownAction": "none",
+    "forwardPorts": [
+        10080
+    ],
+    // 以非 root 用户运行，解决权限问题
+    "remoteUser": "vscode"
+}

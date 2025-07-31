@@ -1,0 +1,19 @@
+tensorflow == 2.2.0
+scipy==1.4.1 
+tensorboard==2.2.0
+filterpy
+cheroot != 8.4.4
+protobuf == 3.20.0
+numpy == 1.19.5
+
+# cherrypy(will be deprecated in future)
+cherrypy
+jinja2
+
+# fastapi
+fastapi
+uvicorn[standard]
+sqlmodel
+boto3
+python-multipart
+pydantic

@@ -1,0 +1,24 @@
+services:
+  nextpoints:
+    container_name: nextpoints
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    shm_size: 16G
+    volumes:
+      - ./:/workspace
+    # command: python3 main.py
+    command: bash
+    stdin_open: true
+    tty: true
+    network_mode: host
+    ports:
+      - "10081:10081"
+    restart: always
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
