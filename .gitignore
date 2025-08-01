@@ -2,7 +2,7 @@
 
 .vscode/
 *.pyc
-databse.db
+database.db
 
 data/*
 !data/example/
