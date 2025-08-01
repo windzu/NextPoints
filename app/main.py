@@ -26,6 +26,8 @@ app = FastAPI(
     title="NextPoints_API",
     description="NextPoints API for managing data import and annotation tasks",
     version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
 )
 
 
