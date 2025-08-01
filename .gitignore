@@ -2,6 +2,7 @@
 
 .vscode/
 *.pyc
+databse.db
 
 data/*
 !data/example/
