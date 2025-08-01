@@ -224,7 +224,6 @@ async def delete_project(
     return {"message": f"Project {project_id} deleted successfully"}
 
 
-
 @router.get("/{project_id}/frames")
 async def get_project_frames(
     project_id: int,
@@ -294,3 +293,43 @@ async def get_project_frames(
         result.append(frame_data)
     
     return result
+
+@router.get("/get_ego_pose")
+async def get_ego_pose(
+    scene: int,
+    frame: int,
+    session: Session = Depends(get_session)
+):
+    """
+    获取项目的自我姿态数据
+    """
+    project_id= scene  # scene 等价于 project_id
+
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # 查询对应帧的自我姿态数据
+    frame_data = session.exec(
+        select(Frame).where(
+            Frame.project_id == project_id,
+            Frame.timestamp_ns == frame
+        )
+    ).first()
+    
+    if not frame_data or not frame_data.pose:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ego pose data not found for this frame"
+        )
+    
+    return frame_data.pose
+
+    return {
+        "project_id": project.id,
+        "frame": frame,
+        "ego_pose": frame_data.pose
+    }
