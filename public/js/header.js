@@ -1,28 +1,32 @@
 
 import { saveWorldList } from "./save.js";
 
-var Header = function (ui, data, cfg, onSceneChanged, onFrameChanged, onObjectSelected, onCameraChanged) {
+var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObjectSelected, onCameraChanged) {
 
     this.ui = ui;
     this.data = data;
     this.cfg = cfg;
     this.boxUi = ui.querySelector("#box");
     this.refObjUi = ui.querySelector("#ref-obj");
-    this.sceneSelectorUi = ui.querySelector("#scene-selector");
+
+    // 获取四个项目状态选择器
+    this.projectSelectors = {
+        unstarted: ui.querySelector("#unstarted-projects"),
+        in_progress: ui.querySelector("#in-progress-projects"),
+        completed: ui.querySelector("#completed-projects"),
+        reviewed: ui.querySelector("#reviewed-projects")
+    };
+
     this.frameSelectorUi = ui.querySelector("#frame-selector");
     this.objectSelectorUi = ui.querySelector("#object-selector");
     this.cameraSelectorUi = ui.querySelector("#camera-selector");
     this.changedMarkUi = ui.querySelector("#changed-mark");
 
-    this.onSceneChanged = onSceneChanged;
+    this.onProjectChanged = onProjectChanged;
     this.onFrameChanged = onFrameChanged;
     this.onObjectSelected = onObjectSelected;
     this.onCameraChanged = onCameraChanged;
 
-
-    if (cfg.disableSceneSelector) {
-        this.sceneSelectorUi.style.display = "none";
-    }
 
     if (cfg.disableFrameSelector) {
         this.frameSelectorUi.style.display = "none";
@@ -32,40 +36,56 @@ var Header = function (ui, data, cfg, onSceneChanged, onFrameChanged, onObjectSe
         this.cameraSelectorUi.style.display = "none";
     }
 
-    // update scene selector ui
+    // 更新项目选择器的方法
+    this.updateProjectSelectors = function (projectList) {
+        // 按状态分类项目
+        const projectsByStatus = {
+            unstarted: [],
+            in_progress: [],
+            completed: [],
+            reviewed: []
+        };
 
+        // 将项目按状态分类
+        projectList.forEach(project => {
+            if (projectsByStatus[project.status]) {
+                projectsByStatus[project.status].push(project);
+            }
+        });
 
-
-
-    this.updateSceneList = function (sceneDescList) {
-        let scene_selector_str = "<option>--scene--</option>";
-        for (let scene in sceneDescList) {
-            if (data.sceneDescList[scene])
-                scene_selector_str += `<option value="${scene}">${scene} - ${data.sceneDescList[scene].scene}</option>`;
-            else
-                scene_selector_str += `<option value="${scene}">${scene}</option>`;
-        }
-
-        this.ui.querySelector("#scene-selector").innerHTML = scene_selector_str;
+        // 更新每个状态的选择器
+        Object.keys(this.projectSelectors).forEach(status => {
+            const selector = this.projectSelectors[status];
+            if (selector) {
+                let optionsHtml = `<option value="">${status}</option>`;
+                projectsByStatus[status].forEach(project => {
+                    optionsHtml += `<option value="${project.id}">${project.name} (${project.frame_count} frames)</option>`;
+                });
+                selector.innerHTML = optionsHtml;
+            }
+        });
     }
 
-    this.updateSceneList(this.data.sceneDescList);
+    // 初始化项目列表
+    this.updateProjectSelectors(this.data.projectList || []);
 
+    // 重新加载项目列表的按钮事件
     this.ui.querySelector("#btn-reload-scene-list").onclick = (event) => {
-        let curentValue = this.sceneSelectorUi.value;
-
-        this.data.readSceneList().then((sceneDescList => {
-            this.updateSceneList(sceneDescList);
-            this.sceneSelectorUi.value = curentValue;
-        }))
+        this.data.readProjectList().then((projectList) => {
+            this.updateProjectSelectors(projectList);
+        });
     }
 
-
-
-    this.sceneSelectorUi.onchange = (e) => { this.onSceneChanged(e); };
-    this.objectSelectorUi.onchange = (e) => { this.onObjectSelected(e); };
-    this.frameSelectorUi.onchange = (e) => { this.onFrameChanged(e); };
-    this.cameraSelectorUi.onchange = (e) => { this.onCameraChanged(e); };
+    // 绑定项目选择器的事件
+    Object.values(this.projectSelectors).forEach(selector => {
+        if (selector) {
+            selector.onchange = (e) => {
+                if (e.target.value) {
+                    this.onProjectChanged(e);
+                }
+            };
+        }
+    });
 
     this.setObject = function (id) {
         this.objectSelectorUi.value = id;

@@ -8,7 +8,7 @@ export class ProjectManager {
         this.projectSelectors = new Map();
 
         this.selectorConfigs = [
-            { id: 'unlabeled-projects', status: 'unlabeled', label: 'Unlabeled' },
+            { id: 'unstarted-projects', status: 'unstarted', label: 'Unstarted' },
             { id: 'in-progress-projects', status: 'in_progress', label: 'In Progress' },
             { id: 'completed-projects', status: 'completed', label: 'Completed' },
             { id: 'reviewed-projects', status: 'reviewed', label: 'Reviewed' }
@@ -67,7 +67,7 @@ export class ProjectManager {
 
     async loadProjectsByStatus(status) {
         try {
-            const response = await fetch(`/api/projects?status_filter=${status}`);
+            const response = await fetch(`/api/projects/list_projects?status_filter=${status}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
