@@ -88,7 +88,7 @@ async def create_project(
                 detail=f"Failed to sync S3 data: {str(e)}"
             )
         
-        return ProjectResponse(
+        project_response = ProjectResponse(
             id=project.id,
             name=project.name,
             description=project.description,
@@ -96,6 +96,8 @@ async def create_project(
             created_at=project.created_at.isoformat(),
             frame_count=len(frames_data)
         )
+
+        return project_response
         
     except Exception as e:
         logger.error(f"Failed to create project: {e}")
@@ -105,7 +107,7 @@ async def create_project(
         )
 
 
-@router.get("/", response_model=List[ProjectResponse])
+@router.get("/list_projects", response_model=List[ProjectResponse])
 async def list_projects(
     status_filter: Optional[ProjectStatus] = None,
     session: Session = Depends(get_session)

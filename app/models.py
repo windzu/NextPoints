@@ -60,7 +60,7 @@ class Frame(SQLModel, table=True):
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    timestamp_ns: int = Field(index=True, description="以纳秒为单位的时间戳")
+    timestamp_ns: str = Field(index=True, description="以纳秒为单位的时间戳")
 
     # 必需数据
     pointcloud_s3_key: str  # 点云数据完整路径

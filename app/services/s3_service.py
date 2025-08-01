@@ -186,14 +186,13 @@ class S3Service:
                     pose_files[timestamp_str] = key
             
             # 构建帧数据
-            for timestamp_str, pointcloud_key in pointcloud_files.items():
-                timestamp_ns = int(timestamp_str) * 1000000  # 转换为纳秒
+            for timestamp_ns, pointcloud_key in pointcloud_files.items():
                 
                 frame_data = {
                     'timestamp_ns': timestamp_ns,
                     'pointcloud_s3_key': pointcloud_key,
-                    'images': image_files.get(timestamp_str, {}),
-                    'pose_s3_key': pose_files.get(timestamp_str)
+                    'images': image_files.get(timestamp_ns, {}),
+                    'pose_s3_key': pose_files.get(timestamp_ns)
                 }
                 
                 frames_data.append(frame_data)
