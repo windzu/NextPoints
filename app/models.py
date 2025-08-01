@@ -148,3 +148,27 @@ class ProjectResponse(BaseModel):
 class ProjectStatusUpdateRequest(BaseModel):
     """项目状态更新请求模型"""
     status: ProjectStatus
+
+
+# 项目元数据相关模型
+class FrameMetadata(BaseModel):
+    """帧元数据响应模型"""
+    id: int
+    timestamp_ns: str
+    pointcloud_url: str
+    images: Optional[Dict[str, str]] = None
+    pose: Optional[Dict] = None
+    annotation_status: AnnotationStatus
+
+
+class CalibrationMetadata(BaseModel):
+    """标定信息响应模型"""
+    intrinsics: Dict[str, Dict] = {}
+    extrinsics: Dict[str, Dict] = {}
+
+
+class ProjectMetadataResponse(BaseModel):
+    """项目完整元数据响应模型"""
+    project: ProjectResponse
+    frames: List[FrameMetadata]
+    calibration: CalibrationMetadata

@@ -116,6 +116,29 @@ class S3Service:
             logger.error(f"Failed to generate presigned URL: {e}")
             raise
     
+    def get_batch_presigned_urls(self, bucket_name: str, object_keys: List[str], 
+                                expiration: int = 3600) -> Dict[str, str]:
+        """
+        批量生成预签名 URL
+        
+        Args:
+            bucket_name: 存储桶名称
+            object_keys: 对象键列表
+            expiration: 过期时间（秒）
+            
+        Returns:
+            对象键到预签名URL的映射
+        """
+        try:
+            urls = {}
+            for object_key in object_keys:
+                if object_key:  # 确保object_key不为空
+                    urls[object_key] = self.get_presigned_url(bucket_name, object_key, expiration)
+            return urls
+        except Exception as e:
+            logger.error(f"Failed to generate batch presigned URLs: {e}")
+            raise
+    
     def get_object_url(self, bucket_name: str, object_key: str, 
                       use_presigned: bool = False, expiration: int = 3600) -> str:
         """
