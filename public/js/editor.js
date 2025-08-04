@@ -931,14 +931,6 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
         return true;
     };
 
-    // this.animate= function() {
-    //     let self=this;
-    //     requestAnimationFrame( function(){self.animate();} );
-    //     this.viewManager.mainView.orbit_orth.update();
-    // };
-
-
-
     this.render = function () {
 
         this.viewManager.mainView.render();
@@ -969,14 +961,10 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     };
 
     this.scene_changed = async function (sceneName) {
-
-        //var sceneName = event.currentTarget.value;
-
         if (sceneName.length == 0) {
             return;
         }
 
-        // console.log("choose sceneName " + sceneName);
         var meta = this.data.getMetaBySceneName(sceneName);
 
         if (!meta) {
@@ -994,8 +982,6 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
         if (meta.camera) {
             this.imageContextManager.updateCameraList(meta.camera);
         }
-
-        //load_obj_ids_of_scene(sceneName);
     };
 
     this.frame_changed = function (event) {

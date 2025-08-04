@@ -568,8 +568,6 @@ function BoxEditorManager(parentUi, viewManager, objectTrackView,
         let frames = sceneMeta.frames.slice(startIndex, startIndex + this.batchSize);
 
 
-        //this.viewManager.mainView.clearView();
-
         frames.forEach(async (frame, editorIndex) => {
             let world = await data.getWorld(sceneName, frame);
             let editor = this.addEditor();

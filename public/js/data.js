@@ -3,417 +3,289 @@ import { logger } from "./log.js";
 import { World } from "./world.js";
 
 class Data {
-
-    constructor(cfg) {
-        this.cfg = cfg;
-
-    }
-
-
-    async readProjectList(statusFilter) {
-        let urlWithParams = '/api/projects/list_projects';
-        if (statusFilter != null && statusFilter !== '') {
-            const queryString = new URLSearchParams({ status_filter: statusFilter }).toString();
-            urlWithParams += `?${queryString}`;
-        }
-
-        return fetch(urlWithParams)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                } else {
-                    return response.json();
-                }
-            })
-            .then(projects => {
-                // 假设你想存储所有项目
-                this.projectList = projects;
-                return projects;
-            })
-            .catch(error => {
-                console.error("Error reading project list:", error);
-                throw error; // 推荐抛出让上层判断如何处理
-            });
-    }
-
-
-    // 修改 init 方法，不再接收参数
-    async init() {
-        const projects = await this.readProjectList(); // 默认加载全部
-        if (!projects || projects.length === 0) {
-            console.warn('No projects available');
-            return;
-        }
-
-        this.currentProject = projects[0];  // 默认选第一个项目
-    }
-
-    // multiple world support
-    // place world by a offset so they don't overlap
-    dbg = new Debug();
-
-    worldGap = 1000.0;
+    cfg;
+    projectList = [];
+    meta = {};
     worldList = [];
-    MaxWorldNumber = 80;
-    createWorldIndex = 0; // this index shall not repeat, so it increases permanently
-
-    async getWorld(project_id, frame_id, on_preload_finished) {
-        // find in list
-
-        if (!this.meta[project_id]) {
-            await this.readProjectMetaData(project_id)
-        }
-
-        if (!this.meta[project_id]) {
-            logger.log("load project failed", project_id);
-            return null;
-        }
-
-        let world = this.worldList.find((w) => {
-            return w.frameInfo.scene == project_id && w.frameInfo.frame == frame_id;
-        })
-        if (world) // found!
-            return world;
-
-
-        world = this._createWorld(project_id, frame_id, on_preload_finished);
-
-        return world;
-    };
-
-    _createWorld(project_id, frame_id, on_preload_finished) {
-
-        // 这里生成一系列 offset ,用于在 new world 时分配
-        // offset 的创建是有规律的，不会重复
-        // 生成 offset 的原因是在前端页面中只有一个 3d 画布, 但却同时加载了多帧点云, 以及在多帧编辑的界面中
-        // 我们会同时有多个 world, 他们的点云数据是不同的，但是他们的 3d 画布是一样的 , 而所有点云的原始数据默认是以原点为中心的
-        // 所以此时多个 world 的点云数据会重叠在一起，为了避免这种情况，我们在创建每个world时候就为其分配一个 offset
-        // 这个 offset 用于将每个点云从原点移开，这样就不会重叠了
-        // 所以这个 offset 需要非常大，并且不会重复 , 以保证不会重叠 , 在这里采用的是类似一个螺旋线的方式生成 offset ,并在此基础上*1000 以保证足够大
-        // 这样最终的效果是每个点云会被分配到一个 1000*1000*1000的立方体中，这样就不会重叠了
-
-        let [x, y, z] = this.allocateOffset();
-        let world = new World(this, sceneName, frame, [this.worldGap * x, this.worldGap * y, this.worldGap * z], on_preload_finished);
-        world.offsetIndex = [x, y, z];
-        this.createWorldIndex++;
-        this.worldList.push(world);
-
-        return world;
-
-    };
-
-
-    findWorld(sceneName, frameIndex) {
-        let world = this.worldList.find((w) => {
-            return w.frameInfo.scene == sceneName && w.frameInfo.frame_index == frameIndex;
-        })
-        if (world) // found!
-            return world;
-        else
-            return null;
-    };
-
+    webglScene = null;
+    webglMainScene = null;
+    world = null;
+    refEgoPose = {};
     offsetList = [[0, 0, 0]];
     lastSeedOffset = [0, 0, 0];
     offsetsAliveCount = 0;
-    allocateOffset() {
+    worldGap = 1000.0;
+    MaxWorldNumber = 80;
+    createWorldIndex = 0;
+    dbg = new Debug();
 
-        // we need to make sure the first frame loaded in a scene 
-        // got to locate in [0,0,0]
+    constructor(cfg) {
+        this.cfg = cfg;
+    }
 
-        if (this.offsetsAliveCount == 0) {
-            //reset offsets.
+    async readProjectList(statusFilter = '') {
+        try {
+            const url = new URL('/api/projects/list_projects', window.location.origin);
+            if (statusFilter) url.searchParams.set('status_filter', statusFilter);
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Failed: ${response.status}`);
+
+            const projects = await response.json();
+            this.projectList = projects;
+            return projects;
+        } catch (err) {
+            console.error("Error reading project list:", err);
+            throw err;
+        }
+    }
+
+    async init() {
+        const projects = await this.readProjectList();
+        if (!projects || projects.length === 0) {
+            console.warn("No projects available");
+            return;
+        }
+        this.currentProject = projects[0];
+    }
+
+    getMetaBySceneName = (sceneName) => this.meta[sceneName];
+
+    getProjectByName = (projectName) => this.projectList?.find(p => p.name === projectName) ?? null;
+
+    allocateOffset = () => {
+        if (this.offsetsAliveCount === 0) {
             this.offsetList = [[0, 0, 0]];
             this.lastSeedOffset = [0, 0, 0];
         }
 
+        if (this.offsetList.length === 0) {
+            let [x, y] = this.lastSeedOffset;
 
-
-        if (this.offsetList.length == 0) {
-            let [x, y, z] = this.lastSeedOffset;
-
-            if (x == y) {
-                x = x + 1;
+            if (x === y) {
+                x += 1;
                 y = 0;
-            }
-            else {
-                y = y + 1;
+            } else {
+                y += 1;
             }
 
             this.lastSeedOffset = [x, y, 0];
+            const newOffsets = [
+                [x, y, 0], [-x, y, 0], [x, -y, 0], [-x, -y, 0],
+                [y, x, 0], [-y, x, 0], [y, -x, 0], [-y, -x, 0]
+            ];
 
-            this.offsetList.push([x, y, 0]);
-
-            if (x != 0) this.offsetList.push([-x, y, 0]);
-            if (y != 0) this.offsetList.push([x, -y, 0]);
-            if (x * y != 0) this.offsetList.push([-x, -y, 0]);
-
-            if (x != y) {
-                this.offsetList.push([y, x, 0]);
-
-                if (y != 0) this.offsetList.push([-y, x, 0]);
-                if (x != 0) this.offsetList.push([y, -x, 0]);
-                if (x * y != 0) this.offsetList.push([-y, -x, 0]);
-            }
+            newOffsets.forEach(offset => {
+                if (!this.offsetList.includes(offset)) this.offsetList.push(offset);
+            });
         }
 
-        let ret = this.offsetList.pop();
         this.offsetsAliveCount++;
-
-        return ret;
+        return this.offsetList.pop();
     };
 
-    returnOffset(offset) {
+    returnOffset = (offset) => {
         this.offsetList.push(offset);
         this.offsetsAliveCount--;
     };
 
-    deleteDistantWorlds(world) {
-        let currentWorldIndex = world.frameInfo.frame_index;
+    findWorld = (scene, frameIndex) =>
+        this.worldList.find(w => w.frameInfo.scene === scene && w.frameInfo.frame_index === frameIndex) ?? null;
 
-        let disposable = (w) => {
-            let distant = Math.abs(w.frameInfo.frame_index - currentWorldIndex) > this.MaxWorldNumber;
-            let active = w.everythingDone;
-            if (w.annotation.modified) {
-                console.log("deleting world not saved. stop.");
-            }
+    _createWorld = (sceneName, frameId, onPreloadFinished) => {
+        const [x, y, z] = this.allocateOffset();
+        const world = new World(this, sceneName, frameId, [this.worldGap * x, this.worldGap * y, this.worldGap * z], onPreloadFinished);
+        world.offsetIndex = [x, y, z];
 
-            return distant && !active && !w.annotation.modified;
+        this.createWorldIndex++;
+        this.worldList.push(world);
+        return world;
+    };
+
+    async getWorld(sceneName, frameId, onPreloadFinished) {
+        if (!this.meta[sceneName]) {
+            await this.readSceneMetaData(sceneName);
         }
 
-        let distantWorldList = this.worldList.filter(w => disposable(w));
+        if (!this.meta[sceneName]) {
+            logger.log("load project failed", sceneName);
+            return null;
+        }
 
-        distantWorldList.forEach(w => {
+        const existing = this.worldList.find(w => w.frameInfo.scene === sceneName && w.frameInfo.frame === frameId);
+        return existing ?? this._createWorld(sceneName, frameId, onPreloadFinished);
+    }
+
+    deleteDistantWorlds = (currentWorld) => {
+        const currentIndex = currentWorld.frameInfo.frame_index;
+
+        const removable = (w) => {
+            const tooFar = Math.abs(w.frameInfo.frame_index - currentIndex) > this.MaxWorldNumber;
+            const isSafe = !w.annotation.modified && w.everythingDone;
+            return tooFar && isSafe;
+        };
+
+        const toDelete = this.worldList.filter(removable);
+        toDelete.forEach(w => {
             this.returnOffset(w.offsetIndex);
             w.deleteAll();
         });
 
-
-        this.worldList = this.worldList.filter(w => !disposable(w));
-
+        this.worldList = this.worldList.filter(w => !removable(w));
     };
 
-    deleteOtherWorldsExcept = function (keepScene) {
-        // release resources if scene changed
+    deleteOtherWorldsExcept = (keepScene) => {
         this.worldList.forEach(w => {
-            if (w.frameInfo.scene != keepScene) {
+            if (w.frameInfo.scene !== keepScene) {
                 this.returnOffset(w.offsetIndex);
                 w.deleteAll();
-
                 this.removeRefEgoPoseOfScene(w.frameInfo.scene);
             }
-        })
-        this.worldList = this.worldList.filter(w => w.frameInfo.scene == keepScene);
+        });
+        this.worldList = this.worldList.filter(w => w.frameInfo.scene === keepScene);
     };
 
+    getRefEgoPose = (sceneName, currentPose) => {
+        return this.refEgoPose[sceneName] ?? (this.refEgoPose[sceneName] = currentPose);
+    };
 
-    refEgoPose = {};
-    getRefEgoPose(sceneName, currentPose) {
-        if (this.refEgoPose[sceneName]) {
-            return this.refEgoPose[sceneName];
-        }
-        else {
-            this.refEgoPose[sceneName] = currentPose;
-            return currentPose;
-        }
-    }
+    removeRefEgoPoseOfScene = (sceneName) => {
+        delete this.refEgoPose[sceneName];
+    };
 
-    removeRefEgoPoseOfScene(sceneName) {
-        if (this.refEgoPose[sceneName])
-            delete this.refEgoPose[sceneName];
-    }
+    forcePreloadScene = (sceneName, currentWorld) => {
+        const meta = currentWorld.sceneMeta;
+        const currentIndex = currentWorld.frameInfo.frame_index;
+        const start = Math.max(0, currentIndex - this.MaxWorldNumber / 2);
+        const end = Math.min(meta.frames.length, start + this.MaxWorldNumber);
+        this._doPreload(sceneName, start, end);
+        logger.log(`${end - start} frames created`);
+    };
 
-    forcePreloadScene(sceneName, currentWorld) {
-        //this.deleteOtherWorldsExcept(sceneName);
-        let meta = currentWorld.sceneMeta;
-
-        let currentWorldIndex = currentWorld.frameInfo.frame_index;
-        let startIndex = Math.max(0, currentWorldIndex - this.MaxWorldNumber / 2);
-        let endIndex = Math.min(meta.frames.length, startIndex + this.MaxWorldNumber);
-
-        this._doPreload(sceneName, startIndex, endIndex);
-
-        logger.log(`${endIndex - startIndex} frames created`);
-    }
-
-    preloadScene(sceneName, currentWorld) {
-
-        // clean other scenes.
+    preloadScene = (sceneName, currentWorld) => {
         this.deleteOtherWorldsExcept(sceneName);
         this.deleteDistantWorlds(currentWorld);
-
-        if (!this.cfg.enablePreload)
-            return;
-
+        if (!this.cfg.enablePreload) return;
         this.forcePreloadScene(sceneName, currentWorld);
-
     };
 
-    _doPreload(sceneName, startIndex, endIndex) {
-        let meta = this.getMetaBySceneName(sceneName);
+    _doPreload = (sceneName, startIndex, endIndex) => {
+        const meta = this.getMetaBySceneName(sceneName);
+        const pending = meta.frames.slice(startIndex, endIndex).filter(f =>
+            !this.worldList.find(w => w.frameInfo.scene === sceneName && w.frameInfo.frame === f)
+        );
 
-        let numLoaded = 0;
-        let _need_create = (frame) => {
-            let world = this.worldList.find((w) => {
-                return w.frameInfo.scene == sceneName && w.frameInfo.frame == frame;
-            })
+        logger.log(`preload ${meta.scene} ${pending}`);
+        pending.forEach(f => this._createWorld(sceneName, f));
+    };
 
-            return !world;
-        }
-
-        let _do_create = (frame) => {
-            this._createWorld(sceneName, frame);
-            numLoaded++;
-        };
-
-        let pendingFrames = meta.frames.slice(startIndex, endIndex).filter(_need_create);
-
-        logger.log(`preload ${meta.scene} ${pendingFrames}`);
-        // if (numLoaded > 0){
-        //     meta.frames.slice(endIndex, Math.min(endIndex+5, meta.frames.length)).forEach(_do_create);
-        //     meta.frames.slice(Math.max(0, startIndex-5), startIndex).forEach(_do_create);
-        // }
-
-        pendingFrames.forEach(_do_create);
-    }
-
-
-    reloadAllAnnotation = function (done) {
+    reloadAllAnnotation = (done) => {
         this.worldList.forEach(w => w.reloadAnnotation(done));
     };
 
-    onAnnotationUpdatedByOthers(scene, frames) {
+    onAnnotationUpdatedByOthers = (scene, frames) => {
         frames.forEach(f => {
-            let world = this.worldList.find(w => (w.frameInfo.scene == scene && w.frameInfo.frame == f));
-            if (world)
-                world.annotation.reloadAnnotation();
-        })
+            const w = this.worldList.find(w => w.frameInfo.scene === scene && w.frameInfo.frame === f);
+            if (w) w.annotation.reloadAnnotation();
+        });
     };
 
-    webglScene = null;
-    set_webglScene = function (scene, mainScene) {
+    set_webglScene = (scene, mainScene) => {
         this.webglScene = scene;
         this.webglMainScene = mainScene;
     };
 
-    scale_point_size(v) {
+    scale_point_size = (v) => {
         this.cfg.point_size *= v;
-        // if (this.world){
-        //     this.world.lidar.set_point_size(this.cfg.point_size);
-        // }
-
-        this.worldList.forEach(w => {
-            w.lidar.set_point_size(this.cfg.point_size);
-        });
+        this.worldList.forEach(w => w.lidar.set_point_size(this.cfg.point_size));
     };
 
-    scale_point_brightness(v) {
+    scale_point_brightness = (v) => {
         this.cfg.point_brightness *= v;
-
-        // if (this.world){
-        //     this.world.lidar.recolor_all_points();
-        // }
-
-        this.worldList.forEach(w => {
-            w.lidar.recolor_all_points();
-        })
+        this.worldList.forEach(w => w.lidar.recolor_all_points());
     };
 
-    set_box_opacity(opacity) {
+    set_box_opacity = (opacity) => {
         this.cfg.box_opacity = opacity;
-
-        this.worldList.forEach(w => {
-            w.annotation.set_box_opacity(this.cfg.box_opacity);
-        });
+        this.worldList.forEach(w => w.annotation.set_box_opacity(opacity));
     };
 
-    toggle_background() {
+    toggle_background = () => {
         this.cfg.show_background = !this.cfg.show_background;
-
         if (this.cfg.show_background) {
             this.world.lidar.cancel_highlight();
-        }
-        else {
+        } else {
             this.world.lidar.hide_background();
         }
     };
 
-    set_obj_color_scheme(scheme) {
-
-
+    set_obj_color_scheme = (scheme) => {
         pointsGlobalConfig.color_obj = scheme;
-
-        // toto: move to world
         this.worldList.forEach(w => {
-            if (pointsGlobalConfig.color_obj == "no") {
+            if (scheme === "no") {
                 w.lidar.color_points();
-            }
-            else {
+            } else {
                 w.lidar.color_objects();
             }
-
             w.lidar.update_points_color();
-
             w.annotation.color_boxes();
-        })
+        });
     };
 
-    world = null;
-
-    activate_world = function (world, on_finished, dontDestroyOldWorld) {
-
-        if (dontDestroyOldWorld) {
-            world.activate(this.webglScene, null, on_finished);
-        }
-        else {
-            var old_world = this.world;   // current world, should we get current world later?
-            this.world = world;  // swich when everything is ready. otherwise data.world is half-baked, causing mysterious problems.
-
-            world.activate(this.webglMainScene,
-                function () {
-                    if (old_world)
-                        old_world.unload();
-                },
-                on_finished);
-        }
+    activate_world = (world, onFinished, dontDestroyOld = false) => {
+        const old = this.world;
+        this.world = world;
+        world.activate(this.webglMainScene, () => {
+            if (!dontDestroyOld && old) old.unload();
+        }, onFinished);
     };
 
+    async readSceneMetaData(sceneName) {
+        try {
+            const response = await fetch(`/api/projects/${sceneName}/metadata`);
+            if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
 
-    meta = {};  //meta data
+            const data = await response.json();
+            const frames = data.frames.map(f => f.timestamp_ns);
+            const frameDetails = Object.fromEntries(data.frames.map(f => [f.timestamp_ns, f]));
 
-    getMetaBySceneName = (sceneName) => {
-        return this.meta[sceneName];
-    };
-
-
-    get_current_world_scene_meta() {
-        return this.getMetaBySceneName(this.world.frameInfo.scene);
-    };
-
-
-    readProjectMetaData(project_id) {
-        let self = this;
-        return new Promise(function (resolve, reject) {
-            let xhr = new XMLHttpRequest();
-
-            xhr.onreadystatechange = function () {
-                if (this.readyState != 4)
-                    return;
-
-                if (this.status == 200) {
-                    let projectMeta = JSON.parse(this.responseText);
-                    self.meta[project_id] = projectMeta;
-                    resolve(projectMeta);
-                }
-
+            const sceneMetadata = {
+                scene: sceneName,
+                frames,
+                frameDetails,
+                camera: [],
+                boxtype: "psr",
+                point_transform_matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                calib: { camera: {} }
             };
 
-            xhr.open('GET', `/scenemeta?scene=${project_id}`, true);
-            xhr.send();
-        });
-    }
-};
+            if (data.calibration) {
+                for (const [sensorId, calib] of Object.entries(data.calibration)) {
+                    if (calib.camera_config) {
+                        sceneMetadata.camera.push(sensorId);
+                        sceneMetadata.calib.camera[sensorId] = {
+                            ...calib,
+                            intrinsic: calib.camera_config.intrinsic,
+                            extrinsic: this._createExtrinsicMatrix(calib.translation, calib.rotation)
+                        };
+                    }
+                }
+            }
 
+            this.meta[sceneName] = sceneMetadata;
+            return sceneMetadata;
+        } catch (err) {
+            console.error("Failed to read scene metadata:", err);
+            throw err;
+        }
+    }
+
+    _createExtrinsicMatrix = (translation = [0, 0, 0]) => [
+        [1, 0, 0, translation[0]],
+        [0, 1, 0, translation[1]],
+        [0, 0, 1, translation[2]],
+        [0, 0, 0, 1],
+    ];
+}
 
 export { Data };
-
