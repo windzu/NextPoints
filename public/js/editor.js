@@ -925,7 +925,7 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
 
 
             default:
-                // console.log('unhandled', event.currentTarget.id, event.type);
+            // console.log('unhandled', event.currentTarget.id, event.type);
         }
 
         return true;
@@ -2372,11 +2372,11 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
 
     };
 
-    this.load_world = async function (sceneName, frame, onFinished) {
+    this.load_world = async function (project_id, frame_id, onFinished) {
 
         this.data.dbg.dump();
 
-        logger.log(`load ${sceneName}, ${frame}`);
+        logger.log(`load ${project_id}, ${frame_id}`);
 
         var self = this;
         //stop if current world is not ready!
@@ -2394,7 +2394,7 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
             this.viewManager.mainView.transform_control.detach();
         }
 
-        var world = await this.data.getWorld(sceneName, frame);
+        var world = await this.data.getWorld(project_id, frame_id);
 
         if (world) {
             this.data.activate_world(

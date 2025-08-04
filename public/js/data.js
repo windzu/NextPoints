@@ -1,5 +1,3 @@
-
-
 import { Debug } from "./debug.js";
 import { logger } from "./log.js";
 import { World } from "./world.js";
@@ -11,10 +9,13 @@ class Data {
 
     }
 
-    async readSceneList(path) {
-        const queryString = new URLSearchParams({ path: path }).toString();
-        const urlWithParams = queryString ? `/get_all_scene_desc?${queryString}` : '/get_all_scene_desc';
 
+    async readProjectList(statusFilter) {
+        let urlWithParams = '/api/projects/list_projects';
+        if (statusFilter != null && statusFilter !== '') {
+            const queryString = new URLSearchParams({ status_filter: statusFilter }).toString();
+            urlWithParams += `?${queryString}`;
+        }
 
         return fetch(urlWithParams)
             .then(response => {
@@ -24,18 +25,27 @@ class Data {
                     return response.json();
                 }
             })
-            .then(ret => {
-                // sceneDescList is a dict where key is sceneName and value is None
-                this.sceneDescList = ret;
-                return ret;
+            .then(projects => {
+                // 假设你想存储所有项目
+                this.projectList = projects;
+                return projects;
             })
-            .catch(reject => {
-                console.log("error read scene list!");
+            .catch(error => {
+                console.error("Error reading project list:", error);
+                throw error; // 推荐抛出让上层判断如何处理
             });
     }
 
-    async init(path) {
-        await this.readSceneList(path);
+
+    // 修改 init 方法，不再接收参数
+    async init() {
+        const projects = await this.readProjectList(); // 默认加载全部
+        if (!projects || projects.length === 0) {
+            console.warn('No projects available');
+            return;
+        }
+
+        this.currentProject = projects[0];  // 默认选第一个项目
     }
 
     // multiple world support
@@ -47,31 +57,31 @@ class Data {
     MaxWorldNumber = 80;
     createWorldIndex = 0; // this index shall not repeat, so it increases permanently
 
-    async getWorld(sceneName, frame, on_preload_finished) {
+    async getWorld(project_id, frame_id, on_preload_finished) {
         // find in list
 
-        if (!this.meta[sceneName]) {
-            await this.readSceneMetaData(sceneName)
+        if (!this.meta[project_id]) {
+            await this.readProjectMetaData(project_id)
         }
 
-        if (!this.meta[sceneName]) {
-            logger.log("load scene failed", sceneName);
+        if (!this.meta[project_id]) {
+            logger.log("load project failed", project_id);
             return null;
         }
 
         let world = this.worldList.find((w) => {
-            return w.frameInfo.scene == sceneName && w.frameInfo.frame == frame;
+            return w.frameInfo.scene == project_id && w.frameInfo.frame == frame_id;
         })
         if (world) // found!
             return world;
 
 
-        world = this._createWorld(sceneName, frame, on_preload_finished);
+        world = this._createWorld(project_id, frame_id, on_preload_finished);
 
         return world;
     };
 
-    _createWorld(sceneName, frame, on_preload_finished) {
+    _createWorld(project_id, frame_id, on_preload_finished) {
 
         // 这里生成一系列 offset ,用于在 new world 时分配
         // offset 的创建是有规律的，不会重复
@@ -381,7 +391,7 @@ class Data {
     };
 
 
-    readSceneMetaData(sceneName) {
+    readProjectMetaData(project_id) {
         let self = this;
         return new Promise(function (resolve, reject) {
             let xhr = new XMLHttpRequest();
@@ -391,14 +401,14 @@ class Data {
                     return;
 
                 if (this.status == 200) {
-                    let sceneMeta = JSON.parse(this.responseText);
-                    self.meta[sceneName] = sceneMeta;
-                    resolve(sceneMeta);
+                    let projectMeta = JSON.parse(this.responseText);
+                    self.meta[project_id] = projectMeta;
+                    resolve(projectMeta);
                 }
 
             };
 
-            xhr.open('GET', `/scenemeta?scene=${sceneName}`, true);
+            xhr.open('GET', `/scenemeta?scene=${project_id}`, true);
             xhr.send();
         });
     }

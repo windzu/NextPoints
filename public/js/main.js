@@ -36,7 +36,8 @@ async function createMainEditor() {
   let url = new URL(url_string);
   //language
   let path = url.searchParams.get("path");
-  await data.init(path);
+  // await data.init(path);
+  await data.init();
 
   let editor = new Editor(maindiv.lastElementChild, maindiv, editorCfg, data, "main-editor")
   window.editor = editor;
@@ -52,12 +53,11 @@ async function start() {
 
   let url_string = window.location.href
   let url = new URL(url_string);
-  //language
-  let scene = url.searchParams.get("scene");
-  let frame = url.searchParams.get("frame");
+  let project_id = url.searchParams.get("project_id");
+  let frame_id = url.searchParams.get("frame_id");
 
-  if (scene && frame) {
-    mainEditor.load_world(scene, frame);
+  if (project_id && frame_id) {
+    mainEditor.load_world(project_id, frame_id);
   }
 }
 
