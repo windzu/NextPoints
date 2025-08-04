@@ -3,8 +3,9 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from typing import List, Dict, Optional, Tuple
 import os
 import re
-from datetime import datetime, timedelta
 import logging
+import json
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +92,49 @@ class S3Service:
         except Exception as e:
             logger.error(f"Failed to list objects: {e}")
             raise
+
+    def list_all_objects(self, bucket_name: str, prefix: str) -> List[Dict]:
+        """
+        列出存储桶中指定前缀下的所有对象。
+        (Lists all objects under a given prefix in a bucket.)
+        """
+        paginator = self.s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+        all_objects = []
+        for page in pages:
+            if "Contents" in page:
+                all_objects.extend(page['Contents'])
+        return all_objects
     
-    def get_presigned_url(self, bucket_name: str, object_key: str, 
+    def read_json_object(self, bucket_name: str, key: str) -> Dict:
+        """
+        从 S3 读取并解析一个 JSON 文件。
+        (Reads and parses a JSON file from S3.)
+        """
+        try:
+            response = self.s3_client.get_object(Bucket=bucket_name, Key=key)
+            content = response['Body'].read().decode('utf-8')
+            return json.loads(content)
+        except Exception as e:
+            print(f"Error reading JSON object s3://{bucket_name}/{key}: {e}")
+            raise
+    
+    def upload_json_object(self, bucket_name: str, key: str, data_dict: Dict[str, Any]):
+        """
+        将一个 Python 字典序列化为 JSON 并上传到 S3。
+        """
+        try:
+            self.s3_client.put_object(
+                Bucket=bucket_name,
+                Key=key,
+                Body=json.dumps(data_dict, indent=2), # indent for human readability
+                ContentType='application/json'
+            )
+        except ClientError as e:
+            print(f"Error uploading JSON object to s3://{bucket_name}/{key}: {e}")
+            raise
+
+    def generate_presigned_url(self, bucket_name: str, object_key: str, 
                          expiration: int = 3600) -> str:
         """
         生成预签名 URL
@@ -133,7 +175,7 @@ class S3Service:
             urls = {}
             for object_key in object_keys:
                 if object_key:  # 确保object_key不为空
-                    urls[object_key] = self.get_presigned_url(bucket_name, object_key, expiration)
+                    urls[object_key] = self.generate_presigned_url(bucket_name, object_key, expiration)
             return urls
         except Exception as e:
             logger.error(f"Failed to generate batch presigned URLs: {e}")
@@ -154,7 +196,7 @@ class S3Service:
             对象访问 URL
         """
         if use_presigned:
-            return self.get_presigned_url(bucket_name, object_key, expiration)
+            return self.generate_presigned_url(bucket_name, object_key, expiration)
         else:
             # 构建直接访问 URL
             if hasattr(self.s3_client, '_endpoint') and self.s3_client._endpoint.host:

@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict,Any
 from sqlmodel import SQLModel, Field, Relationship
 from datetime import datetime
 from enum import Enum
@@ -6,17 +6,11 @@ from sqlalchemy import Column, JSON  # ✅ 新增导入
 from pydantic import BaseModel
 
 
+# Database Models
+
 # 项目状态枚举
 class ProjectStatus(str, Enum):
     unstarted = "unstarted"
-    in_progress = "in_progress"
-    completed = "completed"
-    reviewed = "reviewed"
-
-
-# 帧标注状态枚举
-class AnnotationStatus(str, Enum):
-    unlabeled = "unlabeled"
     in_progress = "in_progress"
     completed = "completed"
     reviewed = "reviewed"
@@ -28,7 +22,7 @@ class Project(SQLModel, table=True):
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
+    name: str = Field(index=True,unique=True)  # 项目名称，唯一
     description: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -49,73 +43,6 @@ class Project(SQLModel, table=True):
 
     s3_root_path: str  # 项目数据的根路径
 
-    # 关联帧与标定信息
-    frames: List["Frame"] = Relationship(back_populates="project")
-    calibration: Optional["Calibration"] = Relationship(back_populates="project")
-
-
-class Frame(SQLModel, table=True):
-    """
-    帧数据表：代表一个时间点的多模态数据（点云、图像、位姿等）
-    """
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    timestamp_ns: str = Field(index=True, description="以纳秒为单位的时间戳")
-
-    # 必需数据
-    pointcloud_s3_key: str  # 点云数据完整路径
-
-    # 可选数据
-    images: Optional[Dict[str, str]] = Field(
-        default=None, sa_column=Column(JSON), description="相机ID到图像路径的映射"
-    )
-
-    pose: Optional[Dict] = Field(
-        default=None, sa_column=Column(JSON), description="车辆位姿信息（位置 + 姿态）"
-    )
-
-    annotation_status: AnnotationStatus = Field(default=AnnotationStatus.unlabeled)
-
-    # 外键关联项目
-    project_id: int = Field(foreign_key="project.id")
-    project: Project = Relationship(back_populates="frames")
-
-    # 标注信息
-    annotation: Optional["Annotation"] = Relationship(back_populates="frame")
-
-
-class Annotation(SQLModel, table=True):
-    """
-    标注结果表：一个帧可以有一个对应的标注结果
-    """
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    frame_id: int = Field(foreign_key="frame.id", unique=True)
-    frame: Frame = Relationship(back_populates="annotation")
-
-    content: Dict = Field(
-        default={},
-        sa_column=Column(JSON),
-        description="标注内容，可为 3D box、mask、多模态结构等",
-    )
-
-
-class Calibration(SQLModel, table=True):
-    """
-    标定信息表：每个项目对应一组传感器的内外参
-    """
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    project_id: int = Field(foreign_key="project.id", unique=True)
-    project: Project = Relationship(back_populates="calibration")
-
-    intrinsics: Dict[str, Dict] = Field(
-        default={}, sa_column=Column(JSON), description="相机ID到内参矩阵"
-    )
-
-    extrinsics: Dict[str, Dict] = Field(
-        default={}, sa_column=Column(JSON), description="传感器对之间的变换关系"
-    )
 
 
 # Projects Model
@@ -155,20 +82,51 @@ class FrameMetadata(BaseModel):
     """帧元数据响应模型"""
     id: int
     timestamp_ns: str
+    prev_timestamp_ns: Optional[str] = None
+    next_timestamp_ns: Optional[str] = None
     pointcloud_url: str
     images: Optional[Dict[str, str]] = None
     pose: Optional[Dict] = None
-    annotation_status: AnnotationStatus
 
+
+class IgnoreArea(BaseModel):
+    x: float
+    y: float
+    z: Optional[float] = 0.0
+    width: float
+    height: float
+    yaw: Optional[float] = 0.0
+
+class CameraConfig(BaseModel):
+    """相机配置模型"""
+    width: int
+    height: int
+    model: str
+    intrinsic: List[List[float]]  # 相机内参矩阵
+    distortion_coefficients: List[float]  # 畸变系数
 
 class CalibrationMetadata(BaseModel):
     """标定信息响应模型"""
-    intrinsics: Dict[str, Dict] = {}
-    extrinsics: Dict[str, Dict] = {}
+    channel: str
+    translation: List[float]
+    rotation: List[float]
+    camera_config: Optional[CameraConfig] = None  # 包含相机内参、畸变系数等
+    ignore_areas: List[IgnoreArea] = []  # 可选，忽略区域列表
+
 
 
 class ProjectMetadataResponse(BaseModel):
     """项目完整元数据响应模型"""
     project: ProjectResponse
+
+    # 摘要信息
+    frame_count: int
+    start_timestamp_ns: str
+    end_timestamp_ns: str
+    duration_seconds: float
+
+    # 标定信息（字典结构）
+    calibration: Dict[str, CalibrationMetadata]
+
+    # 帧列表（有序且包含上下文链接）
     frames: List[FrameMetadata]
-    calibration: CalibrationMetadata
