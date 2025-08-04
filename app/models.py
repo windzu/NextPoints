@@ -69,7 +69,6 @@ class ProjectResponse(BaseModel):
     description: Optional[str]
     status: ProjectStatus
     created_at: str
-    frame_count: int
 
 
 class ProjectStatusUpdateRequest(BaseModel):

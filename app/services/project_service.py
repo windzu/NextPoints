@@ -78,16 +78,13 @@ def create_project(
         # 3. check meta.json 是否存在
         # (Check if meta.json exists)
         meta_key = str(Path(project.bucket_prefix or "") / "meta.json")
-        frame_count = 0
         try:
             meta_content = s3_service.read_json_object(project.bucket_name, meta_key)
-            frame_count = len(meta_content.get("frames", []))
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey':
                 # 如果不存在，生成并上传 meta.json
                 # (If not exists, generate and upload meta.json)
                 meta_content = _generate_and_upload_meta_json(project, s3_service)
-                frame_count = len(meta_content.get("frames", []))
             else:
                 # 处理其他可能的 S3 错误（如权限问题）
                 raise HTTPException(status_code=500, detail=f"S3 error reading meta.json: {e}")
@@ -100,7 +97,6 @@ def create_project(
             description=project.description,
             status=project.status,
             created_at=project.created_at.isoformat(),  # 👈 转成字符串
-            frame_count=frame_count,
         )
     
     except Exception as e:
@@ -190,7 +186,6 @@ def get_project_metadata(
         description=project.description,
         status=project.status,
         created_at=project.created_at.isoformat(),  # 转成字符串
-        frame_count=len(frames_metadata_list)  # 从frames_metadata_list计算帧数
     )
     summary = meta_content.get("summary", {})
     
