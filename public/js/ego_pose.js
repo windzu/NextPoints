@@ -10,13 +10,13 @@ class EgoPose {
 
     preload(on_preload_finished) {
         this.on_preload_finished = on_preload_finished;
-        
+
         // 优先使用frameInfo中已经加载的pose数据
         if (this.frameInfo.pose) {
             console.log("DEBUG: Using pose from frameInfo");
             this.egoPose = this.frameInfo.pose;
             this.preloaded = true;
-            
+
             if (this.on_preload_finished) {
                 this.on_preload_finished();
             }

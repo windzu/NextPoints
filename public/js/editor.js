@@ -967,11 +967,11 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     this.frame_changed = function (event) {
         // debug
         console.log("frame changed", event.currentTarget.value);
-        
+
         // 由于scene-selector被注释掉了，我们需要从项目选择器或其他地方获取sceneName
         // 首先尝试从data.world获取，如果没有则从项目选择器获取
         var sceneName = "";
-        
+
         if (this.data.world) {
             sceneName = this.data.world.frameInfo.scene;
             console.log("DEBUG: frame_changed - got sceneName from data.world:", sceneName);
@@ -2314,31 +2314,31 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
 
         console.log("DEBUG: on_load_world_finished - setting document title");
         document.title = "Next Points" + world.frameInfo.scene;
-        
+
         console.log("DEBUG: on_load_world_finished - moving axis helper and range circle");
         // switch view positoin
         this.moveAxisHelper(world);
         this.moveRangeCircle(world);
-        
+
         console.log("DEBUG: on_load_world_finished - looking at world");
         this.lookAtWorld(world);
-        
+
         console.log("DEBUG: on_load_world_finished - unselecting box");
         this.unselectBox(null, true);
         this.unselectBox(null, true);
-        
+
         console.log("DEBUG: on_load_world_finished - first render");
         this.render();
-        
+
         console.log("DEBUG: on_load_world_finished - attaching world to image context manager");
         this.imageContextManager.attachWorld(world);
-        
+
         console.log("DEBUG: on_load_world_finished - rendering 2d image");
         this.imageContextManager.render_2d_image();
-        
+
         console.log("DEBUG: on_load_world_finished - rendering 2d labels");
         this.render2dLabels(world);
-        
+
         console.log("DEBUG: on_load_world_finished - updating frame info");
         this.update_frame_info(world.frameInfo.scene, world.frameInfo.frame);
 
@@ -2353,7 +2353,7 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
         // preload after the first world loaded
         // otherwise the loading of the first world would be too slow
         this.data.preloadScene(world.frameInfo.scene, world);
-        
+
         console.log("DEBUG: on_load_world_finished - finished");
     };
     this.moveAxisHelper = function (world) {
