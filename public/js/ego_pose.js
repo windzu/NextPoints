@@ -4,12 +4,29 @@ class EgoPose {
         this.world = world;
         this.data = this.world.data;
         this.sceneMeta = sceneMeta;
+        this.frameInfo = frameInfo;
     }
 
 
     preload(on_preload_finished) {
         this.on_preload_finished = on_preload_finished;
-        this.load_ego_pose();
+        
+        // 优先使用frameInfo中已经加载的pose数据
+        if (this.frameInfo.pose) {
+            console.log("DEBUG: Using pose from frameInfo");
+            this.egoPose = this.frameInfo.pose;
+            this.preloaded = true;
+            
+            if (this.on_preload_finished) {
+                this.on_preload_finished();
+            }
+            if (this.go_cmd_received) {
+                this.go(this.webglScene, this.on_go_finished);
+            }
+        } else {
+            console.log("DEBUG: No pose in frameInfo, loading via API");
+            this.load_ego_pose();
+        }
     };
 
 

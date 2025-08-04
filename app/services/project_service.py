@@ -11,7 +11,7 @@ from app.models import Project
 from app.services.s3_service import S3Service
 from app.models import (
     ProjectResponse, ProjectCreateRequest, ProjectStatusUpdateRequest,
-    ProjectStatus, FrameMetadata, ProjectMetadataResponse
+    ProjectStatus, FrameMetadata, ProjectMetadataResponse, AnnotationItem
 )
 from app.models import Project,CalibrationMetadata
 from app.database import get_session
@@ -162,6 +162,20 @@ def get_project_metadata(
                 if url:
                     image_urls[cam_id] = url
         
+        # 处理annotation数据，确保格式正确
+        annotation_data = frame_data.get("annotation", [])
+        if not isinstance(annotation_data, list):
+            annotation_data = []
+        
+        # 验证annotation数据格式
+        validated_annotations = []
+        for ann in annotation_data:
+            try:
+                validated_annotations.append(AnnotationItem(**ann))
+            except Exception as e:
+                print(f"Warning: Invalid annotation item in frame {frame_data['timestamp_ns']}: {e}")
+                continue
+        
         frames_metadata_list.append(
             FrameMetadata(
                 # 注意：Frame ID 现在不存在于 meta.json 中，这是一个设计选择。
@@ -174,6 +188,7 @@ def get_project_metadata(
                 pointcloud_url=pointcloud_url or "",
                 images=image_urls,
                 pose=frame_data.get("pose"),
+                annotation=validated_annotations,
                 # annotation_status 不再由帧管理
             )
         )
@@ -216,7 +231,7 @@ def _generate_and_upload_meta_json(
     all_objects = s3_service.list_objects(project.bucket_name, prefix)
 
     # --- Step 1: Parse all S3 files (similar to original sync logic) ---
-    frames_data = defaultdict(lambda: {"image_keys": {}})
+    frames_data: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"image_keys": {}, "annotation": []})
     calib_files = {}
 
     for obj in all_objects:
@@ -240,6 +255,21 @@ def _generate_and_upload_meta_json(
                 # Directly read and embed pose data
                 pose_content = s3_service.read_json_object(project.bucket_name, key)
                 frames_data[timestamp]['pose'] = pose_content
+            elif path_parts[0] == 'label':
+                timestamp = Path(path_parts[-1]).stem
+                # Directly read and embed annotation data
+                try:
+                    annotation_content = s3_service.read_json_object(project.bucket_name, key)
+                    # 确保annotation是列表格式，如果为空则设为空列表
+                    if annotation_content is None:
+                        annotation_content = []
+                    elif not isinstance(annotation_content, list):
+                        print(f"Warning: Annotation file {key} is not a list, setting to empty list")
+                        annotation_content = []
+                    frames_data[timestamp]['annotation'] = annotation_content
+                except Exception as e:
+                    print(f"Warning: Could not read annotation file {key}: {e}")
+                    frames_data[timestamp]['annotation'] = []
             elif path_parts[0] == 'calib':
                 sensor_id = Path(path_parts[-1]).stem
                 calib_content = s3_service.read_json_object(project.bucket_name, key)

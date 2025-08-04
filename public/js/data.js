@@ -241,6 +241,8 @@ class Data {
     };
 
     async readSceneMetaData(sceneName) {
+        // debug
+        console.log("read scene metadata", sceneName);
         try {
             const response = await fetch(`/api/projects/${sceneName}/metadata`);
             if (!response.ok) throw new Error(`HTTP error: ${response.status}`);

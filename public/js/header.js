@@ -3,6 +3,10 @@ import { saveWorldList } from "./save.js";
 
 var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObjectSelected, onCameraChanged) {
 
+    console.log("DEBUG: Header constructor called");
+    console.log("DEBUG: Header - ui:", ui);
+    console.log("DEBUG: Header - onFrameChanged:", onFrameChanged);
+
     this.ui = ui;
     this.data = data;
     this.cfg = cfg;
@@ -22,10 +26,15 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
     this.cameraSelectorUi = ui.querySelector("#camera-selector");
     this.changedMarkUi = ui.querySelector("#changed-mark");
 
+    console.log("DEBUG: Header - frameSelectorUi:", this.frameSelectorUi);
+    console.log("DEBUG: Header - querySelector result for #frame-selector:", ui.querySelector("#frame-selector"));
+
     this.onProjectChanged = onProjectChanged;
     this.onFrameChanged = onFrameChanged;
     this.onObjectSelected = onObjectSelected;
     this.onCameraChanged = onCameraChanged;
+
+    console.log("DEBUG: Header - assigned onFrameChanged:", this.onFrameChanged);
 
 
     if (cfg.disableFrameSelector) {
@@ -87,6 +96,24 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
             };
         }
     });
+
+    // 绑定frame selector的事件
+    console.log("DEBUG: Header - binding frame selector onchange event");
+    if (this.frameSelectorUi) {
+        this.frameSelectorUi.onchange = (e) => {
+            console.log("DEBUG: Header - frame selector changed, value:", e.target.value);
+            if (e.target.value && e.target.value !== "--frame--") {
+                this.onFrameChanged(e);
+            }
+        };
+    }
+
+    // 绑定camera selector的事件
+    if (this.cameraSelectorUi) {
+        this.cameraSelectorUi.onchange = (e) => {
+            this.onCameraChanged(e);
+        };
+    }
 
     this.setObject = function (id) {
         this.objectSelectorUi.value = id;

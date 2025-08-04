@@ -69,33 +69,24 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     this.currentMainEditor = this;  // who is on focus, this or batch-editor-manager?
 
     this.init = function (editorUi) {
+        // debug
+        console.log("Editor init", this.name, editorUi);
 
         let self = this;
         this.editorUi = editorUi;
-
-
-
 
         this.playControl = new PlayControl(this.data);
 
         this.configUi = new ConfigUi(editorUi.querySelector("#config-button"), editorUi.querySelector("#config-wrapper"), this);
 
         this.header = new Header(editorUi.querySelector("#header"), this.data, this.editorCfg,
-            (e) => {
-                this.scene_changed(e.currentTarget.value);
-                //event.currentTarget.blur();
-            },
-            (e) => { this.frame_changed(e) },
-            (e) => { this.object_changed(e) },
-            (e) => { this.camera_changed(e) }
+            (e) => { this.scene_changed(e.currentTarget.value); },
+            (e) => { this.frame_changed(e); },
+            (e) => { this.object_changed(e); },
+            (e) => { this.camera_changed(e); }
         );
 
 
-        //
-        // that way, the operation speed may be better
-        // if we load all worlds, we can speed up batch-mode operations, but the singl-world operations slows down.
-        // if we use two seperate scenes. can we solve this problem?
-        //
         this.scene = new THREE.Scene();
         this.mainScene = this.scene; //new THREE.Scene();
 
@@ -143,21 +134,7 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
 
 
         if (!this.editorCfg.disableMainViewKeyDown) {
-            // this.container.onmouseenter = (event)=>{
-            //     this.container.focus();
-            // };
-
-            // this.container.onmouseleave = (event)=>{
-            //     this.container.blur();                
-            // };
-
-            //this.container.addEventListener( 'keydown', function(e){self.keydown(e);} );
-            //this.editorUi.addEventListener( 'keydown', e=>this.keydown(e); );
-
             this.keydownHandler = (event) => this.keydown(event);
-            //this.keydownDisabled = false;
-            //document.removeEventListener('keydown', this.keydownHandler);
-            //document.addEventListener( 'keydown', this.keydownHandler);
             globalKeyDownManager.register(this.keydownHandler, "main editor");
         }
 
@@ -961,6 +938,9 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     };
 
     this.scene_changed = async function (sceneName) {
+        // debug
+        console.log("scene changed", sceneName);
+
         if (sceneName.length == 0) {
             return;
         }
@@ -985,18 +965,38 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     };
 
     this.frame_changed = function (event) {
-        var sceneName = this.editorUi.querySelector("#scene-selector").value;
-
-        if (sceneName.length == 0 && this.data.world) {
+        // debug
+        console.log("frame changed", event.currentTarget.value);
+        
+        // 由于scene-selector被注释掉了，我们需要从项目选择器或其他地方获取sceneName
+        // 首先尝试从data.world获取，如果没有则从项目选择器获取
+        var sceneName = "";
+        
+        if (this.data.world) {
             sceneName = this.data.world.frameInfo.scene;
+            console.log("DEBUG: frame_changed - got sceneName from data.world:", sceneName);
+        } else {
+            // 尝试从项目选择器获取当前选中的项目
+            const projectSelectors = this.editorUi.querySelectorAll('.project-selector');
+            for (let selector of projectSelectors) {
+                if (selector.value) {
+                    sceneName = selector.value;
+                    console.log("DEBUG: frame_changed - got sceneName from project selector:", sceneName);
+                    break;
+                }
+            }
         }
 
-        if (sceneName.length == 0) {
+        console.log("DEBUG: frame_changed - final sceneName:", sceneName);
+        console.log("DEBUG: frame_changed - this.data.world:", this.data.world);
+
+        if (!sceneName || sceneName.length == 0) {
+            console.log("DEBUG: frame_changed - sceneName is empty, returning");
             return;
         }
 
         var frame = event.currentTarget.value;
-        // console.log(sceneName, frame);
+        console.log("DEBUG: frame_changed - calling load_world with sceneName:", sceneName, "frame:", frame);
         this.load_world(sceneName, frame);
         event.currentTarget.blur();
     };
@@ -2308,28 +2308,53 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     // };
 
     this.on_load_world_finished = function (world) {
+        // debug
+        console.log("DEBUG: on_load_world_finished called with world:", world);
+        logger.log("on_load_world_finished", world.frameInfo.scene, world.frameInfo.frame);
 
-        document.title = "SUSTech POINTS-" + world.frameInfo.scene;
+        console.log("DEBUG: on_load_world_finished - setting document title");
+        document.title = "Next Points" + world.frameInfo.scene;
+        
+        console.log("DEBUG: on_load_world_finished - moving axis helper and range circle");
         // switch view positoin
         this.moveAxisHelper(world);
         this.moveRangeCircle(world);
+        
+        console.log("DEBUG: on_load_world_finished - looking at world");
         this.lookAtWorld(world);
+        
+        console.log("DEBUG: on_load_world_finished - unselecting box");
         this.unselectBox(null, true);
         this.unselectBox(null, true);
+        
+        console.log("DEBUG: on_load_world_finished - first render");
         this.render();
+        
+        console.log("DEBUG: on_load_world_finished - attaching world to image context manager");
         this.imageContextManager.attachWorld(world);
+        
+        console.log("DEBUG: on_load_world_finished - rendering 2d image");
         this.imageContextManager.render_2d_image();
+        
+        console.log("DEBUG: on_load_world_finished - rendering 2d labels");
         this.render2dLabels(world);
+        
+        console.log("DEBUG: on_load_world_finished - updating frame info");
         this.update_frame_info(world.frameInfo.scene, world.frameInfo.frame);
 
+        console.log("DEBUG: on_load_world_finished - selecting locked object");
         this.select_locked_object();
 
+        console.log("DEBUG: on_load_world_finished - setting current scene");
         //load_obj_ids_of_scene(world.frameInfo.scene);
         objIdManager.setCurrentScene(world.frameInfo.scene);
 
+        console.log("DEBUG: on_load_world_finished - preloading scene");
         // preload after the first world loaded
         // otherwise the loading of the first world would be too slow
         this.data.preloadScene(world.frameInfo.scene, world);
+        
+        console.log("DEBUG: on_load_world_finished - finished");
     };
     this.moveAxisHelper = function (world) {
         world.webglGroup.add(this.axis);
@@ -2360,6 +2385,8 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
 
     this.load_world = async function (project_id, frame_id, onFinished) {
 
+        console.log("DEBUG: load_world called with project_id:", project_id, "frame_id:", frame_id);
+
         this.data.dbg.dump();
 
         logger.log(`load ${project_id}, ${frame_id}`);
@@ -2367,31 +2394,41 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
         var self = this;
         //stop if current world is not ready!
         if (this.data.world && !this.data.world.preloaded()) {
+            console.log("DEBUG: load_world - current world is still loading, returning");
             // console.error("current world is still loading.");
             return;
         }
 
         if (this.selected_box && this.selected_box.in_highlight) {
+            console.log("DEBUG: load_world - canceling focus on selected box");
             this.cancelFocus(this.selected_box);
         }
 
         if (this.viewManager.mainView && this.viewManager.mainView.transform_control.visible) {
+            console.log("DEBUG: load_world - detaching transform control");
             //unselect first time
             this.viewManager.mainView.transform_control.detach();
         }
 
+        console.log("DEBUG: load_world - calling this.data.getWorld");
         var world = await this.data.getWorld(project_id, frame_id);
 
+        console.log("DEBUG: load_world - getWorld returned:", world);
+
         if (world) {
+            console.log("DEBUG: load_world - activating world");
             this.data.activate_world(
                 world,
                 function () {
+                    console.log("DEBUG: load_world - world activated, calling on_load_world_finished");
                     self.on_load_world_finished(world);
                     if (onFinished)
                         onFinished();
 
                 }
             );
+        } else {
+            console.log("DEBUG: load_world - world is null or undefined");
         }
 
 

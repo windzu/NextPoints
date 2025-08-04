@@ -77,6 +77,38 @@ class ProjectStatusUpdateRequest(BaseModel):
 
 
 # 项目元数据相关模型
+
+class Position(BaseModel):
+    """位置信息"""
+    x: float
+    y: float
+    z: float
+
+class Rotation(BaseModel):
+    """旋转信息"""
+    x: float
+    y: float
+    z: float
+
+class Scale(BaseModel):
+    """缩放信息"""
+    x: float
+    y: float
+    z: float
+
+class PSR(BaseModel):
+    """位置、缩放、旋转信息"""
+    position: Position
+    rotation: Rotation
+    scale: Scale
+
+class AnnotationItem(BaseModel):
+    """单个标注项"""
+    obj_id: str
+    obj_type: str
+    num_pts: int
+    psr: PSR
+
 class FrameMetadata(BaseModel):
     """帧元数据响应模型"""
     id: int
@@ -86,6 +118,7 @@ class FrameMetadata(BaseModel):
     pointcloud_url: str
     images: Optional[Dict[str, str]] = None
     pose: Optional[Dict] = None
+    annotation: Optional[List[AnnotationItem]] = None
 
 
 class IgnoreArea(BaseModel):

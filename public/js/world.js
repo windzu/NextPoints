@@ -16,6 +16,11 @@ class FrameInfo {
         this.dir = "";
         this.frame_index = this.sceneMeta.frames.findIndex(x => x === frame);
         this.transform_matrix = this.sceneMeta.point_transform_matrix;
+        
+        // 获取当前frame的详细信息，包括annotation和pose
+        this.frameDetails = this.sceneMeta.frameDetails ? this.sceneMeta.frameDetails[this.frame] : null;
+        this.annotation = this.frameDetails ? this.frameDetails.annotation : null;
+        this.pose = this.frameDetails ? this.frameDetails.pose : null;
     }
 
     get_pcd_path() {
