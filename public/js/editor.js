@@ -968,7 +968,7 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
         // debug
         console.log("frame changed", event.currentTarget.value);
 
-        // 由于scene-selector被注释掉了，我们需要从项目选择器或其他地方获取sceneName
+        // 现在使用项目选择器替代了 scene-selector，从 data.world 获取 sceneName
         // 首先尝试从data.world获取，如果没有则从项目选择器获取
         var sceneName = "";
 
@@ -1186,7 +1186,7 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     };
 
     this.object_changed = function (event) {
-        var sceneName = this.data.world.frameInfo.scene; //this.editorUi.querySelector("#scene-selector").value;
+        var sceneName = this.data.world.frameInfo.scene; // 现在从 data.world 获取，不再使用 scene-selector
 
         let objectTrackId = event.currentTarget.value;
         let obj = objIdManager.getObjById(objectTrackId);
@@ -1569,24 +1569,17 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
         }
         else {
             //select box /unselect box
-            if (!this.data.world || (!this.data.world.annotation.boxes && this.data.world.radars.radarList.length == 0 && !this.calib.calib_box)) {
+            if (!this.data.world || (!this.data.world.annotation.boxes && !this.calib.calib_box)) {
                 return;
             }
 
-            let all_boxes = this.data.world.annotation.boxes.concat(this.data.world.radars.getAllBoxes());
-            all_boxes = all_boxes.concat(this.data.world.aux_lidars.getAllBoxes());
+            let all_boxes = [...this.data.world.annotation.boxes];
 
             if (this.calib.calib_box) {
                 all_boxes.push(this.calib.calib_box);
             }
 
             let intersects = this.mouse.getIntersects(this.mouse.onUpPosition, all_boxes);
-
-            if (intersects.length == 0) {
-                if (this.data.world.radar_box) {
-                    intersects = this.mouse.getIntersects(this.mouse.onUpPosition, [this.data.world.radar_box]);
-                }
-            }
 
             if (intersects.length > 0) {
                 //var object = intersects[ 0 ].object;
@@ -2543,10 +2536,6 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
         }
 
         this.autoAdjust.syncFollowers(box);
-
-        // if (box === this.data.world.radar_box){
-        //     this.data.world.move_radar(box);
-        // }
 
         if (box.on_box_changed) {
             box.on_box_changed();

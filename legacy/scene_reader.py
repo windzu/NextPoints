@@ -309,46 +309,6 @@ def get_one_scene(scene_name):
         camera_ext = ".jpg"
     scene["camera_ext"] = camera_ext
 
-    # radar names
-    radar = []
-    radar_ext = ""
-    radar_path = os.path.join(scene_path, "radar")
-    if os.path.exists(radar_path):
-        radars = os.listdir(radar_path)
-        for r in radars:
-            radar_file = os.path.join(scene_path, "radar", r)
-            if os.path.isdir(radar_file):
-                radar.append(r)
-                if radar_ext == "":
-                    # detect camera file ext
-                    files = os.listdir(radar_file)
-                    if len(files) >= 2:
-                        _, radar_ext = os.path.splitext(files[0])
-
-    if radar_ext == "":
-        radar_ext = ".pcd"
-    scene["radar_ext"] = radar_ext
-
-    # aux lidar names
-    aux_lidar = []
-    aux_lidar_ext = ""
-    aux_lidar_path = os.path.join(scene_path, "aux_lidar")
-    if os.path.exists(aux_lidar_path):
-        lidars = os.listdir(aux_lidar_path)
-        for r in lidars:
-            lidar_file = os.path.join(scene_path, "aux_lidar", r)
-            if os.path.isdir(lidar_file):
-                aux_lidar.append(r)
-                if radar_ext == "":
-                    # detect camera file ext
-                    files = os.listdir(radar_file)
-                    if len(files) >= 2:
-                        _, aux_lidar_ext = os.path.splitext(files[0])
-
-    if aux_lidar_ext == "":
-        aux_lidar_ext = ".pcd"
-    scene["aux_lidar_ext"] = aux_lidar_ext
-
     # # ego_pose
     # ego_pose= {}
     # ego_pose_path = os.path.join(scene_dir, "ego_pose")
@@ -366,16 +326,8 @@ def get_one_scene(scene_name):
         #     scene["point_transform_matrix"] = point_transform_matrix
         if camera:
             scene["camera"] = camera
-        if radar:
-            scene["radar"] = radar
-        if aux_lidar:
-            scene["aux_lidar"] = aux_lidar
         if calib_camera:
             calib["camera"] = calib_camera
-        if calib_radar:
-            calib["radar"] = calib_radar
-        if calib_aux_lidar:
-            calib["aux_lidar"] = calib_aux_lidar
         # if ego_pose:
         #     scene["ego_pose"] = ego_pose
 

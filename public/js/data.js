@@ -171,11 +171,24 @@ class Data {
 
     _doPreload = (sceneName, startIndex, endIndex) => {
         const meta = this.getMetaBySceneName(sceneName);
+
+        // 检查 meta 是否存在
+        if (!meta) {
+            console.error(`Scene meta not found for: ${sceneName}`);
+            return;
+        }
+
+        // 检查 frames 是否存在
+        if (!meta.frames) {
+            console.error(`Scene meta frames not found for: ${sceneName}`, meta);
+            return;
+        }
+
         const pending = meta.frames.slice(startIndex, endIndex).filter(f =>
             !this.worldList.find(w => w.frameInfo.scene === sceneName && w.frameInfo.frame === f)
         );
 
-        logger.log(`preload ${meta.scene} ${pending}`);
+        logger.log(`preload ${meta.scene || sceneName} ${pending}`);
         pending.forEach(f => this._createWorld(sceneName, f));
     };
 

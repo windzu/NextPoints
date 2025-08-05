@@ -11,6 +11,7 @@ class FrameInfo {
         this.data = data;
         this.sceneMeta = sceneMeta;
         this.sceneName = sceneName;
+        this.scene = sceneName;  // 添加 scene 属性以保持兼容性
         this.frame = frame;
         this.pcd_ext = "";
         this.dir = "";

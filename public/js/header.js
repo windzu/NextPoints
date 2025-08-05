@@ -91,11 +91,22 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
         if (selector) {
             selector.onchange = (e) => {
                 if (e.target.value) {
+                    // 重置其他项目选择器
+                    this.resetOtherProjectSelectors(e.target);
                     this.onProjectChanged(e);
                 }
             };
         }
     });
+
+    // 重置其他项目选择器的方法
+    this.resetOtherProjectSelectors = function (currentSelector) {
+        Object.values(this.projectSelectors).forEach(selector => {
+            if (selector && selector !== currentSelector) {
+                selector.selectedIndex = 0; // 重置为第一个选项（默认选项）
+            }
+        });
+    };
 
     // 绑定frame selector的事件
     console.log("DEBUG: Header - binding frame selector onchange event");
@@ -149,10 +160,12 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
         },
 
         this.set_frame_info = function (scene, frame, on_scene_changed) {
-
-            if (this.sceneSelectorUi.value != scene) {
-                this.sceneSelectorUi.value = scene;
-                on_scene_changed(scene);
+            // scene-selector 已被移除，现在使用项目选择器
+            // 不再需要设置 scene selector 的值
+            // 如果需要触发 scene 变化，可以直接调用回调函数
+            if (on_scene_changed && typeof on_scene_changed === 'function') {
+                // 可以在这里调用，但通常项目选择器已经处理了这个逻辑
+                // on_scene_changed(scene);
             }
 
             this.frameSelectorUi.value = frame;
@@ -201,7 +214,8 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
 
     this.runModel = function () {
         // 获取当前标注数据路径
-        let currentScene = this.sceneSelectorUi.value;
+        // 现在从 data.world 获取当前场景，因为 scene-selector 已被移除
+        let currentScene = this.data.world ? this.data.world.frameInfo.scene : null;
         let currentFrame = this.frameSelectorUi.value;
 
         if (!currentScene || !currentFrame) {

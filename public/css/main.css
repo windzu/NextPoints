@@ -129,7 +129,7 @@ canvas {
 }
 
 #object-category-selector, 
-#object-track-id-editor, #attr-input, #scene-selector, 
+#object-track-id-editor, #attr-input,
 #frame-selector, #object-selector, 
 #camera-selector, #obj-ids-of-scene
 {
@@ -316,19 +316,6 @@ dynamic set obj-type css has higher priority than this one.
 	stroke: #00ff0088;
 	stroke-width: 2px;
 	fill: #00ff0022;
-}
-
-.radar-points{
-	stroke: #ff0000aa;
-	stroke-width: 2px;
-	fill: #ff0000aa;
-}
-
-.radar-tracks{
-	stroke: #00ff00aa;
-	stroke-width: 2px;
-	fill: #00ff00aa;
-
 }
 
 .image-wrapper {

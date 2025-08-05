@@ -184,20 +184,6 @@ class ConfigUi {
             this.editor.render();
         },
 
-        "#cfg-data-aux-lidar-checkbox": (event) => {
-            let checked = event.currentTarget.checked;
-
-            pointsGlobalConfig.setItem("enableAuxLidar", checked);
-            return false;
-        },
-
-        "#cfg-data-radar-checkbox": (event) => {
-            let checked = event.currentTarget.checked;
-
-            pointsGlobalConfig.setItem("enableRadar", checked);
-            return false;
-        },
-
         "#cfg-data-filter-points-checkbox": (event) => {
             let checked = event.currentTarget.checked;
 
@@ -312,8 +298,6 @@ class ConfigUi {
 
         // init ui
         this.menu.querySelector("#cfg-theme-select").value = pointsGlobalConfig.theme;
-        this.menu.querySelector("#cfg-data-aux-lidar-checkbox").checked = pointsGlobalConfig.enableAuxLidar;
-        this.menu.querySelector("#cfg-data-radar-checkbox").checked = pointsGlobalConfig.enableRadar;
         this.menu.querySelector("#cfg-color-points-select").value = pointsGlobalConfig.color_points;
         this.menu.querySelector("#cfg-coordinate-system-select").value = pointsGlobalConfig.coordinateSystem;
         this.menu.querySelector("#cfg-batch-mode-inst-number").value = pointsGlobalConfig.batchModeInstNumber;

@@ -1,13 +1,11 @@
 
-class Config{
+class Config {
 
     //dataCfg = {
-    
+
     //disableLabels: true,
     enablePreload = true;
     color_points = "mono";
-    enableRadar = false;
-    enableAuxLidar = false;
     enableDynamicGroundLevel = true;
 
     coordinateSystem = 'utm';
@@ -23,7 +21,7 @@ class Config{
     filterPointsZ = 2.0;
 
     batchModeInstNumber = 20;
-    batchModeSubviewSize = {width: 130, height: 450};
+    batchModeSubviewSize = { width: 130, height: 450 };
 
 
     // edit on one box, apply to all selected boxes.
@@ -39,10 +37,10 @@ class Config{
     hideCategory = false;
 
     moveStep = 0.01;  // ratio, percentage
-    rotateStep = Math.PI/360;
-    
+    rotateStep = Math.PI / 360;
+
     ignoreDistantObject = true;
-    
+
     ///editorCfg
 
     //disableSceneSelector = true;
@@ -55,48 +53,40 @@ class Config{
     //disableRangeCircle = true;
     //disableAxis = true;
     //disableMainViewKeyDown = true;
-    //projectRadarToImage = true;
     //projectLidarToImage = true;   
 
-    constructor()
-    {
-        
+    constructor() {
+
     }
 
-    readItem(name, defaultValue, castFunc){
+    readItem(name, defaultValue, castFunc) {
         let ret = window.localStorage.getItem(name);
-        
-        if (ret)
-        {
+
+        if (ret) {
             if (castFunc)
                 return castFunc(ret);
             else
                 return ret;
         }
-        else
-        {
+        else {
             return defaultValue;
-        }        
+        }
     }
 
-    setItem(name, value)
-    {
+    setItem(name, value) {
         this[name] = value;
         if (typeof value == 'object')
             value = JSON.stringify(value);
         window.localStorage.setItem(name, value);
     }
 
-    toBool(v)
-    {
-        return v==="true";
+    toBool(v) {
+        return v === "true";
     }
 
     saveItems = [
         ["theme", null],
-        ["enableRadar", this.toBool],
         ["enablePreload", this.toBool],
-        ["enableAuxLidar", this.toBool],
         ["enableFilterPoints", this.toBool],
         ["filterPointsZ", parseFloat],
         ["color_points", null],
@@ -107,9 +97,8 @@ class Config{
         ["autoUpdateInterpolatedBoxes", this.toBool],
     ];
 
-    load()
-    {
-        this.saveItems.forEach(item=>{
+    load() {
+        this.saveItems.forEach(item => {
             let key = item[0];
             let castFunc = item[1];
 
@@ -118,4 +107,4 @@ class Config{
     }
 };
 
-export {Config};
+export { Config };
