@@ -2,6 +2,9 @@ import json
 import os
 import sys
 import numpy as np
+from typing import List, Optional, Dict, Union
+
+from app.models.annotation_model import WorldAnnotation, AnnotationItem, PSR
 
 
 def get_labels():
@@ -54,30 +57,7 @@ def get_labels():
         for kk in labels_dict[k]:
             labels_list.extend(labels_dict[k][kk])
 
-    # raw labels
-    raw_labels_list = [
-        "PoliceCar",
-        "TourCar",
-        "RoadWorker",
-        "Child",
-        "BabyCart",
-        "Cart",
-        "FireHydrant",
-        "SaftyTriangle",
-        "PlatformCart",
-        "RoadBarrel",
-        "LongVehicle",
-        "ConcreteTruck",
-        "Tram",
-        "Excavator",
-        "ForkLift",
-        "Crane",
-        "RoadRoller",
-        "Bulldozer",
-        "DontCare",
-        "Misc",
-        "Unknown",
-    ]
+
 
     return labels_list
 
@@ -98,13 +78,11 @@ class LabelChecker:
         path (str): scene path
     """
 
-    def __init__(self, path):
-        self.path = path
-        self.load_frame_ids()
-        self.load_labels()
+    def __init__(self, annotations: List[WorldAnnotation]):
+        self.annotations = annotations
 
+        self.build_labels()
         self.def_labels = get_labels()
-
         self.messages = []
 
     def clear_messages(self):
@@ -117,36 +95,27 @@ class LabelChecker:
     def push_message(self, frame, obj_id, desc):
         self.messages.append({"frame_id": frame, "obj_id": obj_id, "desc": desc})
 
-    def load_frame_ids(self):
-        lidar_files = os.listdir(os.path.join(self.path, "lidar"))
-        ids = list(map(lambda f: os.path.splitext(f)[0], lidar_files))
-        self.frame_ids = ids
+    def build_labels(self):
+        self.frame_ids = []
+        self.labels = {}
+        self.obj_ids = {}
 
-    def load_labels(self):
-        label_folder = os.path.join(self.path, "label")
-        files = os.listdir(label_folder)
-        labels = {}
-        obj_ids = {}
+        for annotation in self.annotations:
+            frame_id = annotation.frame
+            if not frame_id:
+                continue
+            if frame_id not in self.frame_ids:
+                self.frame_ids.append(frame_id)
+            if not self.labels.get(frame_id):
+                self.labels[frame_id] = []
 
-        files.sort()
-        print(files)
-        for f in files:
-            with open(os.path.join(label_folder, f), "r") as fp:
-                l = json.load(fp)
-                # print(l)
-                frame_id = os.path.splitext(f)[0]
-                labels[frame_id] = l
+            for item in annotation.annotation:
+                obj_id = item.obj_id
+                if not self.obj_ids.get(obj_id):
+                    self.obj_ids[obj_id] = []
+                self.obj_ids[obj_id].append([frame_id, item.model_dump()])
 
-                for o in l:
-                    obj_id = o["obj_id"]
-                    if frame_id:
-                        if obj_ids.get(obj_id):
-                            obj_ids[obj_id].append([frame_id, o])
-                        else:
-                            obj_ids[obj_id] = [[frame_id, o]]
-
-        self.labels = labels
-        self.obj_ids = obj_ids
+                self.labels[frame_id].append(item.model_dump())
 
     # templates
     def check_one_label(self, func):
@@ -278,7 +247,4 @@ class LabelChecker:
         self.check_one_obj(lambda id, o: self.check_obj_type_consistency(id, o))
 
 
-if __name__ == "__main__":
-    ck = LabelChecker(sys.argv[1])
-    ck.check()
-    ck.show_messages()
+

@@ -131,6 +131,7 @@ class World {
         this.coordinatesOffset = coordinatesOffset;
         this.on_preload_finished = on_preload_finished;
         this.create_time = Date.now();
+
         this.webglGroup = new THREE.Group();
         this.webglGroup.name = "world";
 
@@ -139,29 +140,32 @@ class World {
         this.annotation = new Annotation(this.sceneMeta, this, this.frameInfo);
         this.egoPose = new EgoPose(this.sceneMeta, this, this.frameInfo);
 
+        this.scene = null;
         this.active = false;
         this.everythingDone = false;
         this.destroyed = false;
-
-        this.scene = null;
         this.destroy_old_world = null;
         this.on_finished = null;
 
         this.preload(this.on_preload_finished);
     }
 
+    toString() {
+        return `${this.frameInfo.scene},${this.frameInfo.frame}`;
+    }
+
     preloaded() {
         return this.lidar.preloaded &&
             this.annotation.preloaded &&
-            this.egoPose.preloaded;
+            this.egoPose.preloaded
     }
 
-    preload(on_preload_finished) {
-        const callback = () => this.on_subitem_preload_finished(on_preload_finished);
-        this.lidar.preload(callback);
-        this.annotation.preload(callback);
-        this.cameras.load(callback);
-        this.egoPose.preload(callback);
+    preload(callback) {
+        const cb = () => this.on_subitem_preload_finished(callback);
+        this.lidar.preload(cb);
+        this.annotation.preload(cb);
+        this.cameras.load(cb);
+        this.egoPose.preload(cb);
     }
 
     on_subitem_preload_finished(callback) {
@@ -202,8 +206,8 @@ class World {
             this.trans_utm_lidar = new THREE.Matrix4().copy(this.trans_lidar_utm).invert();
             this.trans_scene_lidar = new THREE.Matrix4().copy(this.trans_lidar_scene).invert();
         } else {
-            this.trans_lidar_utm = identity;
-            this.trans_lidar_scene = offset;
+            this.trans_lidar_utm = identity.clone();
+            this.trans_lidar_scene = offset.clone();
             this.trans_utm_lidar = identity.clone();
             this.trans_scene_lidar = offset.clone().invert();
         }
@@ -217,9 +221,7 @@ class World {
         this.active = true;
         this.destroy_old_world = destroy_old_world;
         this.on_finished = on_finished;
-        if (this.preloaded()) {
-            this.go();
-        }
+        if (this.preloaded()) this.go();
     }
 
     go() {
@@ -262,6 +264,60 @@ class World {
         this.lidar.deleteAll();
         this.annotation.deleteAll();
         this.destroyed = true;
+    }
+
+    add_line(start, end, color) {
+        const line = this.new_line(start, end, color);
+        this.scene.add(line);
+    }
+
+    new_line(start, end, color = 0x00ff00) {
+        const vertex = start.concat(end);
+        this.data.dbg.alloc();
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertex, 3));
+        const material = new THREE.LineBasicMaterial({ color, linewidth: 1, opacity: this.data.cfg.box_opacity, transparent: true });
+        return new THREE.LineSegments(geometry, material);
+    }
+
+    scenePosToLidar(pos) {
+        return new THREE.Vector4(pos.x, pos.y, pos.z, 1).applyMatrix4(this.trans_scene_lidar);
+    }
+
+    lidarPosToScene(pos) {
+        return new THREE.Vector3(pos.x, pos.y, pos.z).applyMatrix4(this.trans_lidar_scene);
+    }
+
+    lidarPosToUtm(pos) {
+        return new THREE.Vector3(pos.x, pos.y, pos.z).applyMatrix4(this.trans_lidar_utm);
+    }
+
+    sceneRotToLidar(rotEuler) {
+        const euler = rotEuler.isEuler ? rotEuler : new THREE.Euler(rotEuler.x, rotEuler.y, rotEuler.z, "XYZ");
+        const q = new THREE.Quaternion().setFromEuler(euler);
+        const globalToLocal = new THREE.Quaternion().setFromRotationMatrix(this.trans_scene_lidar);
+        return new THREE.Euler().setFromQuaternion(q.multiply(globalToLocal), euler.order);
+    }
+
+    lidarRotToScene(rotEuler) {
+        const euler = rotEuler.isEuler ? rotEuler : new THREE.Euler(rotEuler.x, rotEuler.y, rotEuler.z, "XYZ");
+        const q = new THREE.Quaternion().setFromEuler(euler);
+        const localToGlobal = new THREE.Quaternion().setFromRotationMatrix(this.trans_lidar_scene);
+        return new THREE.Euler().setFromQuaternion(q.multiply(localToGlobal), euler.order);
+    }
+
+    lidarRotToUtm(rotEuler) {
+        const euler = rotEuler.isEuler ? rotEuler : new THREE.Euler(rotEuler.x, rotEuler.y, rotEuler.z, "XYZ");
+        const q = new THREE.Quaternion().setFromEuler(euler);
+        const localToGlobal = new THREE.Quaternion().setFromRotationMatrix(this.trans_lidar_utm);
+        return new THREE.Euler().setFromQuaternion(q.multiply(localToGlobal), euler.order);
+    }
+
+    utmRotToLidar(rotEuler) {
+        const euler = rotEuler.isEuler ? rotEuler : new THREE.Euler(rotEuler.x, rotEuler.y, rotEuler.z, "XYZ");
+        const q = new THREE.Quaternion().setFromEuler(euler);
+        const globalToLocal = new THREE.Quaternion().setFromRotationMatrix(this.trans_utm_lidar);
+        return new THREE.Euler().setFromQuaternion(q.multiply(globalToLocal), euler.order);
     }
 }
 

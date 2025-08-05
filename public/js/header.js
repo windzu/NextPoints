@@ -3,10 +3,6 @@ import { saveWorldList } from "./save.js";
 
 var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObjectSelected, onCameraChanged) {
 
-    console.log("DEBUG: Header constructor called");
-    console.log("DEBUG: Header - ui:", ui);
-    console.log("DEBUG: Header - onFrameChanged:", onFrameChanged);
-
     this.ui = ui;
     this.data = data;
     this.cfg = cfg;
@@ -25,9 +21,6 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
     this.objectSelectorUi = ui.querySelector("#object-selector");
     this.cameraSelectorUi = ui.querySelector("#camera-selector");
     this.changedMarkUi = ui.querySelector("#changed-mark");
-
-    console.log("DEBUG: Header - frameSelectorUi:", this.frameSelectorUi);
-    console.log("DEBUG: Header - querySelector result for #frame-selector:", ui.querySelector("#frame-selector"));
 
     this.onProjectChanged = onProjectChanged;
     this.onFrameChanged = onFrameChanged;

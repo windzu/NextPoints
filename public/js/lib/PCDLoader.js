@@ -105,6 +105,8 @@ PCDLoader.prototype = {
 	},
 
 	parse: function (data, url) {
+		return this.parsePcd(data, url);
+
 		var addr = url.split(".");
 		var file_ext = addr[addr.length - 1];
 

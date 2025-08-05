@@ -50,24 +50,16 @@ function Annotation(sceneMeta, world, frameInfo) {
 
         // 优先使用frameInfo中已经加载的annotation数据
         if (this.frameInfo.annotation !== undefined && this.frameInfo.annotation !== null) {
-            console.log("DEBUG: Using annotation from frameInfo");
-            console.log("DEBUG: annotation data:", this.frameInfo.annotation);
-            console.log("DEBUG: annotation type:", typeof this.frameInfo.annotation);
-            console.log("DEBUG: annotation is array:", Array.isArray(this.frameInfo.annotation));
 
             let boxes = this.frameInfo.annotation;
 
             // 确保boxes是数组格式
             if (!Array.isArray(boxes)) {
-                console.log("DEBUG: annotation is not array, using empty array");
                 boxes = [];
             }
 
-            console.log("DEBUG: final boxes:", boxes);
-            console.log("DEBUG: final boxes length:", boxes.length);
             this.proc_annotation(boxes);
         } else {
-            console.log("DEBUG: No annotation in frameInfo, loading via API");
             this.load_annotation((boxes) => this.proc_annotation(boxes));
         }
     };

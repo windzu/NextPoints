@@ -974,7 +974,6 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
 
         if (this.data.world) {
             sceneName = this.data.world.frameInfo.scene;
-            console.log("DEBUG: frame_changed - got sceneName from data.world:", sceneName);
         } else {
             // 尝试从项目选择器获取当前选中的项目
             const projectSelectors = this.editorUi.querySelectorAll('.project-selector');
@@ -987,16 +986,12 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
             }
         }
 
-        console.log("DEBUG: frame_changed - final sceneName:", sceneName);
-        console.log("DEBUG: frame_changed - this.data.world:", this.data.world);
-
         if (!sceneName || sceneName.length == 0) {
             console.log("DEBUG: frame_changed - sceneName is empty, returning");
             return;
         }
 
         var frame = event.currentTarget.value;
-        console.log("DEBUG: frame_changed - calling load_world with sceneName:", sceneName, "frame:", frame);
         this.load_world(sceneName, frame);
         event.currentTarget.blur();
     };
@@ -2301,53 +2296,28 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     // };
 
     this.on_load_world_finished = function (world) {
-        // debug
-        console.log("DEBUG: on_load_world_finished called with world:", world);
-        logger.log("on_load_world_finished", world.frameInfo.scene, world.frameInfo.frame);
-
-        console.log("DEBUG: on_load_world_finished - setting document title");
         document.title = "Next Points" + world.frameInfo.scene;
-
-        console.log("DEBUG: on_load_world_finished - moving axis helper and range circle");
         // switch view positoin
         this.moveAxisHelper(world);
         this.moveRangeCircle(world);
 
-        console.log("DEBUG: on_load_world_finished - looking at world");
         this.lookAtWorld(world);
 
-        console.log("DEBUG: on_load_world_finished - unselecting box");
         this.unselectBox(null, true);
         this.unselectBox(null, true);
 
-        console.log("DEBUG: on_load_world_finished - first render");
         this.render();
-
-        console.log("DEBUG: on_load_world_finished - attaching world to image context manager");
         this.imageContextManager.attachWorld(world);
-
-        console.log("DEBUG: on_load_world_finished - rendering 2d image");
         this.imageContextManager.render_2d_image();
-
-        console.log("DEBUG: on_load_world_finished - rendering 2d labels");
         this.render2dLabels(world);
-
-        console.log("DEBUG: on_load_world_finished - updating frame info");
         this.update_frame_info(world.frameInfo.scene, world.frameInfo.frame);
-
-        console.log("DEBUG: on_load_world_finished - selecting locked object");
         this.select_locked_object();
-
-        console.log("DEBUG: on_load_world_finished - setting current scene");
         //load_obj_ids_of_scene(world.frameInfo.scene);
         objIdManager.setCurrentScene(world.frameInfo.scene);
 
-        console.log("DEBUG: on_load_world_finished - preloading scene");
         // preload after the first world loaded
         // otherwise the loading of the first world would be too slow
         this.data.preloadScene(world.frameInfo.scene, world);
-
-        console.log("DEBUG: on_load_world_finished - finished");
     };
     this.moveAxisHelper = function (world) {
         world.webglGroup.add(this.axis);
@@ -2403,10 +2373,7 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
             this.viewManager.mainView.transform_control.detach();
         }
 
-        console.log("DEBUG: load_world - calling this.data.getWorld");
         var world = await this.data.getWorld(project_id, frame_id);
-
-        console.log("DEBUG: load_world - getWorld returned:", world);
 
         if (world) {
             console.log("DEBUG: load_world - activating world");

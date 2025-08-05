@@ -3,7 +3,7 @@ import { logger } from "./log.js";
 
 function checkScene(scene) {
     // 发送对scene的检查请求 : label合法性
-    const req = new Request(`/checkscene?scene=${scene}`);
+    const req = new Request(`/api/projects/${scene}/check_label`);
     let init = {
         method: 'GET',
         //body: JSON.stringify({"points": data})

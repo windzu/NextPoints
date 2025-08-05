@@ -1,15 +1,20 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select
-from app.models import Project
-from app.database import get_session
-from app.models import (
-    ProjectResponse, ProjectCreateRequest, ProjectStatusUpdateRequest,
-    ProjectStatus, FrameMetadata, CalibrationMetadata, ProjectMetadataResponse
-)
-from app.services.s3_service import S3Service
-from app.services import project_service 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import logging
+
+from app.models.project_model import Project
+from app.database import get_session
+
+from app.models.project_model import (
+    ProjectResponse, ProjectCreateRequest, ProjectStatusUpdateRequest,
+    ProjectStatus
+)
+from app.models.meta_data_model import ProjectMetadataResponse
+from app.models.annotation_model import WorldAnnotation
+
+from app.services import project_service 
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -41,8 +46,29 @@ async def create_project(
             detail=f"Failed to create project: {str(e)}"
         )
 
-
-
+@router.post("/save_world_list", status_code=status.HTTP_200_OK)
+async def save_world_list(
+    request: List[WorldAnnotation],
+    session: Session = Depends(get_session)
+):
+    """
+    保存世界帧的标注数据
+    """
+    try:
+        saved_count = project_service.save_world_list(request, session)
+        if saved_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No annotations were saved"
+            )
+        return {"message": f"Successfully saved {saved_count} annotations"}
+    
+    except Exception as e:
+        logger.error(f"Failed to save world list: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save world list: {str(e)}"
+        )
 
 @router.get("/list_projects", response_model=List[ProjectResponse])
 async def list_projects(
@@ -78,7 +104,6 @@ async def list_projects(
             detail=str(e)
         )
 
-
 @router.get("/{project_name}", response_model=ProjectResponse)
 async def get_project(
     project_name: str,
@@ -105,7 +130,6 @@ async def get_project(
         created_at=project.created_at.isoformat(),
     )
 
-
 @router.get("/{project_name}/metadata", response_model=ProjectMetadataResponse)
 async def get_project_metadata(
     project_name: str,
@@ -129,6 +153,28 @@ async def get_project_metadata(
             detail=f"Failed to get project metadata: {str(e)}"
         )
 
+@router.get("/{project_name}/check_label", response_model=List[Dict[str, Any]])
+async def get_label_check(
+    project_name: str,
+    session: Session = Depends(get_session)
+):
+    """
+    获取项目的标注检查数据
+    """
+    try:
+        annotations = project_service.get_check_label(project_name, session)
+        if not annotations:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No annotations found for this project"
+            )
+        return annotations
+    except Exception as e:
+        logger.error(f"Failed to get label check data: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get label check data: {str(e)}"
+        )
 
 @router.put("/{project_name}/status", response_model=ProjectResponse)
 async def update_project_status(
