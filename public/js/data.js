@@ -149,6 +149,14 @@ class Data {
         return this.refEgoPose[sceneName] ?? (this.refEgoPose[sceneName] = currentPose);
     };
 
+    get_current_world_scene_meta = () => {
+        if (!this.world || !this.world.frameInfo) {
+            console.warn("No active world to get scene metadata.");
+            return null;
+        }
+        return this.getMetaBySceneName(this.world.frameInfo.scene);
+    };
+
     removeRefEgoPoseOfScene = (sceneName) => {
         delete this.refEgoPose[sceneName];
     };

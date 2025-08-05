@@ -134,16 +134,27 @@ def get_project_metadata(
         region_name=project.region_name
     )
 
-    # 3. 尝试读取 meta.json，如果失败则生成它
-    meta_key = str(Path(project.bucket_prefix or "") / "meta.json")
+    # # 3. 尝试读取 meta.json，如果失败则生成它
+    # meta_key = str(Path(project.bucket_prefix or "") / "meta.json")
+    # try:
+    #     meta_content = s3_service.read_json_object(project.bucket_name, meta_key)
+    # except ClientError as e:
+    #     if e.response['Error']['Code'] == 'NoSuchKey':
+    #         meta_content = _generate_and_upload_meta_json(project, s3_service)
+    #     else:
+    #         # Handle other potential S3 errors (e.g., permissions)
+    #         raise HTTPException(status_code=500, detail=f"S3 error reading meta.json: {e}")
+
+    # 3. 每次获取元数据时都生成 meta.json
+    # 这是为了确保数据是最新的，避免缓存问题
     try:
-        meta_content = s3_service.read_json_object(project.bucket_name, meta_key)
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'NoSuchKey':
-            meta_content = _generate_and_upload_meta_json(project, s3_service)
-        else:
-            # Handle other potential S3 errors (e.g., permissions)
-            raise HTTPException(status_code=500, detail=f"S3 error reading meta.json: {e}")
+        meta_content = _generate_and_upload_meta_json(project, s3_service)
+    except Exception as e:
+        # 捕获生成 meta.json 时的任何异常
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate or read meta.json: {str(e)}"
+        )
 
     # --- 从这里开始，我们保证已经拿到了 meta_content ---
     # 4. 转换元数据：用预签名URL替换S3 Keys
