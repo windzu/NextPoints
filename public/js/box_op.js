@@ -284,7 +284,6 @@ function BoxOp() {
 
         if (!rotate_method) {
             let points = box.world.lidar.get_points_relative_coordinates_of_box_wo_rotation(box, 1);
-            //let points = box.world.get_points_relative_coordinates_of_box(box, 1.0);
 
             points = points.filter(function (p) {
                 return p[2] > - box.scale.z / 2 + 0.3;

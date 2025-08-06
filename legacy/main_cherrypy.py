@@ -108,18 +108,6 @@ class Root(object):
         print(ck.messages)
         return ck.messages
 
-    # 接受来自前端的数据 data，返回预测的旋转角度
-    # data  N*3 numpy array
-    @cherrypy.expose
-    @cherrypy.tools.json_out()
-    def predict_rotation(self):
-        cl = cherrypy.request.headers["Content-Length"]
-        rawbody = cherrypy.request.body.readline().decode("UTF-8")
-
-        data = json.loads(rawbody)
-
-        return {"angle": pre_annotate.predict_yaw(data["points"])}
-        # return {}
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -181,47 +169,6 @@ class Root(object):
             # debug
             print("get_all_scene_desc with default path")
             return scene_reader.get_all_scene_desc()
-
-    @cherrypy.expose
-    @cherrypy.tools.json_out()
-    def objs_of_scene(self, scene):
-        return self.get_all_objs(os.path.join("./data", scene))
-
-    def get_all_objs(self, path):
-        label_folder = os.path.join(path, "label")
-        if not os.path.isdir(label_folder):
-            return []
-
-        files = os.listdir(label_folder)
-
-        files = filter(lambda x: x.split(".")[-1] == "json", files)
-
-        def file_2_objs(f):
-            with open(f) as fd:
-                boxes = json.load(fd)
-                objs = [
-                    x
-                    for x in map(
-                        lambda b: {"category": b["obj_type"], "id": b["obj_id"]}, boxes
-                    )
-                ]
-                return objs
-
-        boxes = map(lambda f: file_2_objs(os.path.join(path, "label", f)), files)
-
-        # the following map makes the category-id pairs unique in scene
-        all_objs = {}
-        for x in boxes:
-            for o in x:
-
-                k = str(o["category"]) + "-" + str(o["id"])
-
-                if all_objs.get(k):
-                    all_objs[k]["count"] = all_objs[k]["count"] + 1
-                else:
-                    all_objs[k] = {"category": o["category"], "id": o["id"], "count": 1}
-
-        return [x for x in all_objs.values()]
 
     @cherrypy.expose
     @cherrypy.tools.json_in()

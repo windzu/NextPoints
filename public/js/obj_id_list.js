@@ -76,36 +76,6 @@ class ObjectIdManager {
         this.setObjdIdListOptions();
         if (done) done(this.objectList);
 
-        // 下面是原来的API调用代码，已注释掉
-        /*
-        var xhr = new XMLHttpRequest();
-        // we defined the xhr
-        let self =this;
-
-        xhr.onreadystatechange = function() {
-            if (this.readyState != 4) 
-                return;
-        
-            if (this.status == 200) {
-                var ret = JSON.parse(this.responseText);
-
-                self.objectList = ret;
-                self.sortObjIdList();
-                self.maxId = Math.max(...ret.map(function(x){return x.id;}));
-                if (self.maxId < 0) // this is -infinity if there is no ids.
-                    self.maxId = 0;
-
-                self.setObjdIdListOptions();
-    
-                if (done)
-                    done(ret)
-            }
-    
-        };
-        
-        xhr.open('GET', "/objs_of_scene?scene="+scene, true);
-        xhr.send();
-        */
     }
 
 

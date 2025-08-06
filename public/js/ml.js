@@ -252,9 +252,12 @@ var ml = {
 
     // 通过发送请求到服务器，后端调用相关函数(predict_rotation)预测点云的旋转角度
     predict_rotation: function (data) {
-        const req = new Request("/predict_rotation");
+        const req = new Request("/api/legacy/predict_rotation");
         let init = {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({ "points": data })
         };
         // we defined the xhr

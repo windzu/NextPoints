@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
-from app.routers import projects
+from app.routers import projects,legacy
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from contextlib import asynccontextmanager
@@ -39,6 +39,7 @@ app.mount("/static", StaticFiles(directory="public"), name="static")
 
 
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(legacy.router, prefix="/api/legacy", tags=["legacy"])
 
 
 @app.get("/", response_class=HTMLResponse)

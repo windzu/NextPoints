@@ -208,7 +208,6 @@ async def update_project_status(
         created_at=project.created_at.isoformat(),
     )
 
-
 @router.delete("/{project_name}")
 async def delete_project(
     project_name: str,

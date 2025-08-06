@@ -1,4 +1,11 @@
 from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel
+from typing import List
+import numpy as np
+
+from algos import pre_annotate
+from app.models.legacy_model import PointCloudRequest
 
 router = APIRouter()
 
@@ -8,15 +15,20 @@ router = APIRouter()
 async def read_root():
     return {"message": "Welcome to the legacy API"}
 
-@router.post("/saveworldlist")
-async def save_world_list(data: dict):
-    # 这里实现保存标注数据的逻辑
-    return {"status": "success", "data": data}
-
 @router.post("/predict_rotation")
-async def predict_rotation(data: dict):
-    # 这里实现预测旋转角度的逻辑
-    return {"status": "success", "predicted_rotation": data}
+async def predict_rotation(data: PointCloudRequest):
+    try:
+        # 检查维度是否符合 Nx3
+        points_array = np.array(data.points)
+
+        if points_array.ndim != 2 or points_array.shape[1] != 3:
+            raise HTTPException(status_code=400, detail="Input must be Nx3 point cloud data.")
+
+        angle = pre_annotate.predict_yaw(points_array)
+
+        return {"angle": angle}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 @router.get("/auto_annotate")
 async def auto_annotate():

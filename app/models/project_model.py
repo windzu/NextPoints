@@ -1,8 +1,7 @@
-from typing import Optional, List, Dict,Any
-from sqlmodel import SQLModel, Field, Relationship
+from typing import Optional
+from sqlmodel import SQLModel, Field
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import Column, JSON  # ✅ 新增导入
 from pydantic import BaseModel
 
 
