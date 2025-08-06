@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
+from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
 import logging
@@ -12,8 +13,13 @@ from app.models.project_model import (
 )
 from app.models.meta_data_model import ProjectMetadataResponse
 from app.models.annotation_model import WorldAnnotation
+from app.models.export_model import (
+    NuScenesExportRequest, ExportTaskResponse, ExportTaskStatus,
+    ExportStatus, ExportTaskList
+)
 
-from app.services import project_service 
+from app.services import project_service
+from app.services.export_service import export_service 
 
 
 logger = logging.getLogger(__name__)
@@ -231,6 +237,122 @@ async def delete_project(
     session.commit()
     
     return {"message": f"Project {project_name} deleted successfully"}
+
+
+# ==================== 导出相关路由 ====================
+
+@router.post("/{project_name}/export/nuscenes", response_model=ExportTaskResponse)
+async def start_nuscenes_export(
+    project_name: str,
+    request: NuScenesExportRequest,
+    session: Session = Depends(get_session)
+):
+    """
+    启动 NuScenes 格式导出任务
+    """
+    try:
+        task_response = export_service.start_nuscenes_export(
+            project_name=project_name,
+            export_request=request,
+            session=session
+        )
+        return task_response
+    
+    except Exception as e:
+        logger.error(f"Failed to start NuScenes export for {project_name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start export task: {str(e)}"
+        )
+
+@router.get("/export/tasks/{task_id}", response_model=ExportTaskStatus)
+async def get_export_task_status(task_id: str):
+    """
+    获取导出任务状态
+    """
+    try:
+        return export_service.get_export_status(task_id)
+    except Exception as e:
+        logger.error(f"Failed to get export task status for {task_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get task status: {str(e)}"
+        )
+
+@router.delete("/export/tasks/{task_id}")
+async def cancel_export_task(task_id: str):
+    """
+    取消导出任务
+    """
+    try:
+        return export_service.cancel_export_task(task_id)
+    except Exception as e:
+        logger.error(f"Failed to cancel export task {task_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel task: {str(e)}"
+        )
+
+@router.get("/export/tasks", response_model=ExportTaskList)
+async def list_export_tasks(
+    project_name: Optional[str] = None,
+    status_filter: Optional[ExportStatus] = None,
+    page: int = 1,
+    page_size: int = 10
+):
+    """
+    列出导出任务
+    """
+    try:
+        return export_service.list_export_tasks(
+            project_name=project_name,
+            status_filter=status_filter,
+            page=page,
+            page_size=page_size
+        )
+    except Exception as e:
+        logger.error(f"Failed to list export tasks: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list tasks: {str(e)}"
+        )
+
+@router.get("/export/download/{task_id}")
+async def download_export_result(task_id: str):
+    """
+    下载导出结果文件
+    """
+    try:
+        download_info = export_service.get_download_info(task_id)
+        
+        return FileResponse(
+            path=download_info["file_path"],
+            filename=download_info["filename"],
+            media_type="application/zip",
+            headers={
+                "Content-Length": str(download_info.get("file_size", 0))
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to download export result for {task_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download file: {str(e)}"
+        )
+
+@router.delete("/export/cleanup/{task_id}")
+async def cleanup_export_files(task_id: str):
+    """
+    清理导出任务生成的文件
+    """
+    try:
+        return export_service.cleanup_task_files(task_id)
+    except Exception as e:
+        logger.error(f"Failed to cleanup export files for {task_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cleanup files: {str(e)}"
+        )
 
 
 

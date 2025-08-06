@@ -17,3 +17,8 @@ sqlmodel
 boto3
 python-multipart
 pydantic
+
+# celery 相关依赖
+celery[redis]
+redis
+flower

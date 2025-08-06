@@ -5,4 +5,9 @@
 database.db
 
 data/*
+logs/
+pids/
+celerybeat-schedule
+celerybeat-schedule.db
+*.celerybeat
 !data/example/
