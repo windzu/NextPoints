@@ -11,3 +11,5 @@ celerybeat-schedule
 celerybeat-schedule.db
 *.celerybeat
 !data/example/
+
+dump.rdb

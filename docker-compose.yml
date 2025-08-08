@@ -11,14 +11,16 @@ services:
     command: bash
     stdin_open: true
     tty: true
-    network_mode: host
     ports:
       - "10081:10081"
     restart: always
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:6
+    container_name: nextpoints-redis
+    restart: unless-stopped

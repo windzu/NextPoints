@@ -70,31 +70,6 @@ stop_service() {
     fi
 }
 
-# 停止 Redis（如果是我们启动的）
-stop_redis() {
-    local redis_pid_file="$PID_DIR/redis.pid"
-    
-    if [ -f "$redis_pid_file" ]; then
-        log_step "Stopping Redis server..."
-        local redis_pid=$(cat "$redis_pid_file")
-        if kill -0 "$redis_pid" 2>/dev/null; then
-            redis-cli shutdown 2>/dev/null || kill "$redis_pid" 2>/dev/null || true
-            rm -f "$redis_pid_file"
-            log_info "Redis stopped successfully"
-        else
-            rm -f "$redis_pid_file"
-            log_warn "Redis PID file exists but process not running"
-        fi
-    else
-        # 尝试通过 redis-cli 关闭
-        if redis-cli ping > /dev/null 2>&1; then
-            log_step "Stopping Redis server..."
-            redis-cli shutdown 2>/dev/null || true
-            log_info "Redis stopped successfully"
-        fi
-    fi
-}
-
 # 强制清理相关进程
 force_cleanup() {
     log_step "Performing force cleanup..."
@@ -119,7 +94,7 @@ show_stop_status() {
     local all_stopped=true
     
     # 检查各服务状态
-    services=("redis" "celery_worker" "celery_beat" "flower" "fastapi")
+    services=("celery_worker" "celery_beat" "flower" "fastapi")
     
     for service in "${services[@]}"; do
         local pid_file="$PID_DIR/${service}.pid"
@@ -195,7 +170,6 @@ main() {
     stop_service "flower"
     stop_service "celery_beat"
     stop_service "celery_worker"
-    stop_redis
     
     # 如果指定了强制停止
     if [ "$force_stop" = true ]; then

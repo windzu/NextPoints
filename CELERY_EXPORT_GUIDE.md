@@ -69,10 +69,6 @@ curl -X POST "http://localhost:8000/api/projects/my_project/export/nuscenes" \
   -d '{
     "export_format": "nuscenes_v1.0",
     "coordinate_system": "ego_vehicle",
-    "frame_selection": {
-      "frame_step": 1,
-      "max_frames": 100
-    },
     "annotation_filter": {
       "object_types": ["car", "pedestrian", "bicycle"],
       "min_points": 10

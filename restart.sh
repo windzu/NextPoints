@@ -25,14 +25,14 @@ main() {
     echo -e "${NC}"
     
     log_step "Stopping all services..."
-    ./stop_nextpoints.sh --force
+    ./stop.sh --force
     
     echo ""
     log_step "Waiting 3 seconds before restart..."
     sleep 3
     
     log_step "Starting all services..."
-    ./start_nextpoints.sh
+    ./start.sh
     
     echo ""
     log_info "Restart completed! 🔄"

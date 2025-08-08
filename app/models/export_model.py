@@ -26,13 +26,6 @@ class CoordinateSystem(str, Enum):
     GLOBAL = "global"
     LIDAR = "lidar"
 
-class FrameSelection(BaseModel):
-    """帧选择配置"""
-    start_frame: Optional[str] = None
-    end_frame: Optional[str] = None
-    frame_step: int = Field(default=1, ge=1, description="帧间隔，每隔几帧导出一次")
-    max_frames: Optional[int] = Field(default=None, ge=1, description="最大导出帧数")
-
 class AnnotationFilter(BaseModel):
     """标注过滤配置"""
     object_types: Optional[List[str]] = Field(default=None, description="只导出指定类型的对象")
@@ -54,11 +47,8 @@ class NuScenesExportRequest(BaseModel):
     """NuScenes 导出请求模型"""
     export_format: ExportFormat = ExportFormat.NUSCENES_V1_0
     coordinate_system: CoordinateSystem = CoordinateSystem.EGO_VEHICLE
-    frame_selection: Optional[FrameSelection] = None
     annotation_filter: Optional[AnnotationFilter] = None
     export_options: Optional[ExportOptions] = None
-    notification_email: Optional[str] = Field(default=None, description="完成后通知邮箱")
-    custom_metadata: Optional[Dict[str, Any]] = Field(default=None, description="自定义元数据")
 
 class ExportTaskResponse(BaseModel):
     """导出任务创建响应"""
@@ -66,7 +56,6 @@ class ExportTaskResponse(BaseModel):
     status: ExportStatus
     message: str
     created_at: datetime
-    estimated_duration: Optional[int] = Field(default=None, description="预估耗时（秒）")
     
 class ExportTaskStatus(BaseModel):
     """导出任务状态响应"""

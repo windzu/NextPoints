@@ -53,14 +53,6 @@ check_dependencies() {
         exit 1
     fi
     
-    # 检查 Redis
-    if ! command -v redis-server &> /dev/null; then
-        log_error "Redis is not installed. Please install Redis first."
-        echo "Ubuntu/Debian: sudo apt install redis-server"
-        echo "macOS: brew install redis"
-        exit 1
-    fi
-    
     # 检查 pip 包
     if ! python3 -c "import fastapi, celery, redis" &> /dev/null; then
         log_warn "Some Python packages are missing. Installing..."
@@ -85,30 +77,6 @@ check_port() {
     return 0
 }
 
-# 启动 Redis
-start_redis() {
-    log_step "Starting Redis server..."
-    
-    if ! check_port $REDIS_PORT "Redis"; then
-        log_info "Redis is already running on port $REDIS_PORT"
-        return 0
-    fi
-    
-    # 启动 Redis
-    redis-server --daemonize yes --port $REDIS_PORT --logfile $LOG_DIR/redis.log --pidfile $PID_DIR/redis.pid
-    
-    # 等待 Redis 启动
-    for i in {1..10}; do
-        if redis-cli -p $REDIS_PORT ping > /dev/null 2>&1; then
-            log_info "Redis started successfully on port $REDIS_PORT"
-            return 0
-        fi
-        sleep 1
-    done
-    
-    log_error "Failed to start Redis"
-    exit 1
-}
 
 # 启动 Celery Worker
 start_celery_worker() {
@@ -224,13 +192,6 @@ show_status() {
     log_step "Service Status Summary:"
     echo "================================"
     
-    # Redis 状态
-    if redis-cli -p $REDIS_PORT ping > /dev/null 2>&1; then
-        echo -e "Redis:         ${GREEN}✓ Running${NC} (port $REDIS_PORT)"
-    else
-        echo -e "Redis:         ${RED}✗ Not running${NC}"
-    fi
-    
     # Celery Worker 状态
     if [ -f $PID_DIR/celery_worker.pid ] && kill -0 $(cat $PID_DIR/celery_worker.pid) 2>/dev/null; then
         echo -e "Celery Worker: ${GREEN}✓ Running${NC} (PID: $(cat $PID_DIR/celery_worker.pid))"
@@ -273,8 +234,8 @@ show_usage() {
     echo "Log files location: $LOG_DIR/"
     echo "PID files location: $PID_DIR/"
     echo ""
-    echo "To stop all services: ./stop_nextpoints.sh"
-    echo "To restart services:  ./restart_nextpoints.sh"
+    echo "To stop all services: ./stop.sh"
+    echo "To restart services:  ./restart.sh"
     echo "To view logs:        tail -f $LOG_DIR/<service>.log"
     echo "================================"
 }
@@ -295,7 +256,6 @@ main() {
     # 执行启动步骤
     create_directories
     check_dependencies
-    start_redis
     start_celery_worker
     start_celery_beat
     start_flower
@@ -317,7 +277,7 @@ main() {
 # 错误处理
 cleanup_on_error() {
     log_error "Startup failed. Cleaning up..."
-    ./stop_nextpoints.sh 2>/dev/null || true
+    ./stop.sh 2>/dev/null || true
     exit 1
 }
 
