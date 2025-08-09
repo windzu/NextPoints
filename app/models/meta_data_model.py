@@ -4,17 +4,20 @@ from pydantic import BaseModel
 from app.models.project_model import ProjectResponse
 from app.models.annotation_model import AnnotationItem
 from app.models.calibration_model import CalibrationMetadata
+from base_model import Pose
+
+
 
 
 class FrameMetadata(BaseModel):
     """帧元数据响应模型"""
     id: int
     timestamp_ns: str
-    prev_timestamp_ns: Optional[str] = None
-    next_timestamp_ns: Optional[str] = None
-    pointcloud_url: str
+    prev_timestamp_ns: str
+    next_timestamp_ns: str
+    lidars: Dict[str, str] # 必须有点云数据
     images: Optional[Dict[str, str]] = None
-    pose: Optional[Dict] = None
+    pose: Optional[Pose] = None
     annotation: Optional[List[AnnotationItem]] = None
 
 class ProjectMetadataResponse(BaseModel):

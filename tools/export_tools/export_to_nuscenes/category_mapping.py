@@ -11,6 +11,7 @@ NUSCENES_CATEGORIES = [
     "human.pedestrian.police_officer",
     "human.pedestrian.construction_worker",
     "animal",
+    "vehicle.rider",
     "vehicle.bicycle",
     "vehicle.bus.bendy",
     "vehicle.bus.rigid", 
@@ -51,41 +52,42 @@ NUSCENES_VISIBILITY = {
 # Category mapping from NextPoints to NuScenes
 CATEGORY_MAPPING = {
     # Vehicles
-    "Car": "vehicle.car",
-    "Van": "vehicle.car", 
-    "Bus": "vehicle.bus.rigid",
-    "Truck": "vehicle.truck",
-    "Trailer": "vehicle.trailer",
-    "Motor": "vehicle.motorcycle",
-    "Motorcycle": "vehicle.motorcycle",
+    "car": "vehicle.car",
+    "van": "vehicle.car", 
+    "bus": "vehicle.bus.rigid",
+    "truck": "vehicle.truck",
+    "trailer": "vehicle.trailer",
+    "motorcycle": "vehicle.motorcycle",
     
     # Pedestrians
-    "Pedestrian": "human.pedestrian.adult",
-    "Person": "human.pedestrian.adult",
-    "Child": "human.pedestrian.child",
-    "Police": "human.pedestrian.police_officer",
-    "Worker": "human.pedestrian.construction_worker",
+    "pedestrian": "human.pedestrian.adult",
+    "person": "human.pedestrian.adult",
+    "child": "human.pedestrian.child",
+    "police": "human.pedestrian.police_officer",
+    "worker": "human.pedestrian.construction_worker",
     
     # Cycles
-    "Bicycle": "vehicle.bicycle", 
-    "BicycleGroup": "vehicle.bicycle",
-    "Cyclist": "vehicle.bicycle",
-    "Rider": "vehicle.bicycle",
+    "rider": "vehicle.rider",
+    "bicycle": "vehicle.bicycle",
+    "tricycle": "vehicle.tricycle",
+    "bicycle_group": "vehicle.bicycle_group",
     
     # Animals
-    "Animal": "animal",
-    
+    "animal": "animal",
+    "dog": "animal",
+    "cat": "animal",
+
     # Movable objects
-    "Barrier": "movable_object.barrier",
-    "TrafficCone": "movable_object.trafficcone",
-    "Cone": "movable_object.trafficcone",
-    "Debris": "movable_object.debris",
-    
+    "barrier": "movable_object.barrier",
+    "traffic_cone": "movable_object.trafficcone",
+    "cone": "movable_object.trafficcone",
+    "debris": "movable_object.debris",
+
     # Static objects
-    "BicycleRack": "static_object.bicycle_rack",
-    
+    "bicycle_rack": "static_object.bicycle_rack",
+
     # Default for unknown categories
-    "Unknown": "movable_object.pushable_pullable"
+    "unknown": "movable_object.pushable_pullable"
 }
 
 # Attribute mapping based on object type and context

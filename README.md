@@ -57,9 +57,13 @@ To run the development server, you can use:
    - Open the project in VSCode
    - Click on the green button in the bottom left corner and select "Reopen in Container"
    - This will set up the development environment automatically
-2. start the server
+2. start the fastapi server
    ```bash
    uvicorn app.main:app --host 0.0.0.0 --port 10081 --reload
+   ```
+3. start the celery worker
+   ```bash
+   celery -A app.celery_app worker --loglevel=info
    ```
 
 Then open your browser and visit [http://localhost:10081](http://localhost:10081).

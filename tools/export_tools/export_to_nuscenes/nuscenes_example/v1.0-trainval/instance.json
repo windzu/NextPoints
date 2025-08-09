@@ -1,0 +1,16 @@
+[
+    {
+        "token": "6dd2cbf4c24b4caeb625035869bca7b5",
+        "category_token": "1fa93b757fc74fb197cdd60001ad8abf",
+        "nbr_annotations": 39,
+        "first_annotation_token": "ef63a697930c4b20a6b9791f423351da",
+        "last_annotation_token": "8bb63134d48840aaa2993f490855ff0d"
+    },
+    {
+        "token": "48d58b69b40149aeb2e64aa4b1a9192f",
+        "category_token": "1fa93b757fc74fb197cdd60001ad8abf",
+        "nbr_annotations": 30,
+        "first_annotation_token": "6b89da9bf1f84fd6a5fbe1c3b236f809",
+        "last_annotation_token": "2f69a953ed424deaa2a89ff4cd515c51"
+    }
+]

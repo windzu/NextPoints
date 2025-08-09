@@ -25,12 +25,6 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     
-    # 任务路由
-    task_routes={
-        "app.tasks.export_tasks.export_to_nuscenes": {"queue": "export"},
-        "app.tasks.export_tasks.cleanup_export_files": {"queue": "cleanup"},
-    },
-    
     # 任务超时设置
     task_time_limit=3600,  # 1 小时硬超时
     task_soft_time_limit=3300,  # 55 分钟软超时

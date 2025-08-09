@@ -1,0 +1,60 @@
+[
+    {
+        "token": "70aecbe9b64f4722ab3c230391a3beb8",
+        "sample_token": "cd21dbfc3bd749c7b10a5c42562e0c42",
+        "instance_token": "6dd2cbf4c24b4caeb625035869bca7b5",
+        "visibility_token": "4",
+        "attribute_tokens": [
+            "4d8821270b4a47e3a8a300cbec48188e"
+        ],
+        "translation": [
+            373.214,
+            1130.48,
+            1.25
+        ],
+        "size": [
+            0.621,
+            0.669,
+            1.642
+        ],
+        "rotation": [
+            0.9831098797903927,
+            0.0,
+            0.0,
+            -0.18301629506281616
+        ],
+        "prev": "a1721876c0944cdd92ebc3c75d55d693",
+        "next": "1e8e35d365a441a18dd5503a0ee1c208",
+        "num_lidar_pts": 5,
+        "num_radar_pts": 0
+    },
+    {
+        "token": "7fa3a688931b4500b7ce29d187d3b975",
+        "sample_token": "2ff86dc19c4644a1a88ce5ba848f56e5",
+        "instance_token": "6dd2cbf4c24b4caeb625035869bca7b5",
+        "visibility_token": "4",
+        "attribute_tokens": [
+            "4d8821270b4a47e3a8a300cbec48188e"
+        ],
+        "translation": [
+            373.152,
+            1130.357,
+            1.25
+        ],
+        "size": [
+            0.621,
+            0.669,
+            1.642
+        ],
+        "rotation": [
+            0.9831098797903927,
+            0.0,
+            0.0,
+            -0.18301629506281616
+        ],
+        "prev": "1e8e35d365a441a18dd5503a0ee1c208",
+        "next": "913072e56d6c4025b9b47ba085dd6d7c",
+        "num_lidar_pts": 6,
+        "num_radar_pts": 0
+    }
+]

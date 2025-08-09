@@ -53,9 +53,9 @@ def generate_ego_pose_token(scene_name: str, timestamp: Union[str, int]) -> str:
     return generate_uuid_from_input(f"ego_pose-{scene_name}-{timestamp}")
 
 
-def generate_calibrated_sensor_token(sensor_name: str) -> str:
+def generate_calibrated_sensor_token(scene_name: str, sensor_name: str) -> str:
     """Generate calibrated_sensor token"""
-    return generate_uuid_from_input(f"calibrated_sensor-{sensor_name}")
+    return generate_uuid_from_input(f"calibrated_sensor-{scene_name}-{sensor_name}")
 
 
 def generate_sensor_token(sensor_name: str) -> str:

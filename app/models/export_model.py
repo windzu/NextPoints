@@ -28,7 +28,7 @@ class CoordinateSystem(str, Enum):
 
 class AnnotationFilter(BaseModel):
     """标注过滤配置"""
-    object_types: Optional[List[str]] = Field(default=None, description="只导出指定类型的对象")
+    object_types: Optional[List[str]] = Field(default=None, description="对象类型列表")
     min_points: Optional[int] = Field(default=None, ge=0, description="最小点云数量阈值")
     confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="置信度阈值")
     bbox_size_filter: Optional[Dict[str, float]] = Field(default=None, description="边界框尺寸过滤")
@@ -36,12 +36,9 @@ class AnnotationFilter(BaseModel):
 class ExportOptions(BaseModel):
     """导出选项配置"""
     include_images: bool = True
-    include_pointcloud: bool = True
-    include_calibration: bool = True
+    include_sweeps: bool = True
     include_ego_pose: bool = True
-    compress_output: bool = True
     output_format: str = "zip"  # zip, tar.gz
-    coordinate_precision: int = Field(default=6, ge=1, le=10, description="坐标精度（小数位数）")
 
 class NuScenesExportRequest(BaseModel):
     """NuScenes 导出请求模型"""

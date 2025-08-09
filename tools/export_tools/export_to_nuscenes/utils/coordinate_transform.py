@@ -2,27 +2,16 @@
 Coordinate transformation utilities for NuScenes export
 """
 import numpy as np
-import quaternion
+from scipy.spatial.transform import Rotation as R
 from typing import List, Tuple, Dict, Any
 from app.models.annotation_model import PSR, Position, Rotation
 
-
 def euler_to_quaternion(rotation: Rotation) -> List[float]:
-    """
-    Convert euler angles (x, y, z) to quaternion [w, x, y, z]
-    
-    Args:
-        rotation: Rotation object with x, y, z euler angles in radians
-        
-    Returns:
-        Quaternion as [w, x, y, z]
-    """
-    # Create quaternion from euler angles (roll, pitch, yaw)
-    q = quaternion.from_euler_angles(rotation.x, rotation.y, rotation.z)
-    
-    # Return as [w, x, y, z] format (NuScenes standard)
-    return [q.w, q.x, q.y, q.z]
-
+    # 创建 Rotation 对象 (roll, pitch, yaw)
+    r = R.from_euler('xyz', [rotation.x, rotation.y, rotation.z])
+    # 返回 [w, x, y, z]
+    q = r.as_quat()  # SciPy 默认是 [x, y, z, w]
+    return [q[3], q[0], q[1], q[2]]
 
 def transform_position_to_global(
     local_position: Position,

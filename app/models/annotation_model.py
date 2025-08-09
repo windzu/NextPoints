@@ -1,23 +1,7 @@
 from typing import Optional, List, Dict
 from pydantic import BaseModel, field_validator
 
-class Position(BaseModel):
-    """位置信息"""
-    x: float
-    y: float
-    z: float
-
-class Rotation(BaseModel):
-    """旋转信息"""
-    x: float
-    y: float
-    z: float
-
-class Scale(BaseModel):
-    """缩放信息"""
-    x: float
-    y: float
-    z: float
+from base_model import Position, Rotation, Scale
 
 class PSR(BaseModel):
     """位置、缩放、旋转信息"""

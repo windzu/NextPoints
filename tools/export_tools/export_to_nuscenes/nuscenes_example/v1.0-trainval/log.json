@@ -1,0 +1,23 @@
+[
+    {
+        "token": "7e25a2c8ea1f41c5b0da1e69ecfa71a2",
+        "logfile": "n015-2018-07-24-11-22-45+0800",
+        "vehicle": "n015",
+        "date_captured": "2018-07-24",
+        "location": "singapore-onenorth"
+    },
+    {
+        "token": "53cf9c55dd8644bea67b9f009fc1ee38",
+        "logfile": "n008-2018-08-01-15-16-36-0400",
+        "vehicle": "n008",
+        "date_captured": "2018-08-01",
+        "location": "boston-seaport"
+    },
+    {
+        "token": "6f7fe59adf984e55a82571ab4f17e4e2",
+        "logfile": "n008-2018-08-27-11-48-51-0400",
+        "vehicle": "n008",
+        "date_captured": "2018-08-27",
+        "location": "boston-seaport"
+    }
+]

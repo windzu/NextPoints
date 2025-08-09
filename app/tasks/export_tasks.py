@@ -27,7 +27,7 @@ from app.models.meta_data_model import ProjectMetadataResponse
 
 redis_client = redis.Redis.from_url(celery_app.conf.broker_url)
 
-@celery_app.task(bind=True, name="export_to_nuscenes")
+@celery_app.task(bind=True)
 def export_to_nuscenes_task(
     self,
     project_name: str,
