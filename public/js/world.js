@@ -30,7 +30,8 @@ class FrameInfo {
     }
 
     anno_to_boxes(text) {
-        return JSON.parse(text);
+        let anno_json = JSON.parse(text);
+        return anno_json;
     }
 
     transform_point(m, x, y, z) {
@@ -39,33 +40,6 @@ class FrameInfo {
             x * m[3] + y * m[4] + z * m[5],
             x * m[6] + y * m[7] + z * m[8]
         ];
-    }
-
-
-    xyz_to_psr(ann_input) {
-        const ann = (ann_input.length === 24) ? ann_input : ann_input.filter((_, i) => (i + 1) % 4 !== 0);
-
-        const pos = { x: 0, y: 0, z: 0 };
-        for (let i = 0; i < 8; i++) {
-            pos.x += ann[i * 3];
-            pos.y += ann[i * 3 + 1];
-            pos.z += ann[i * 3 + 2];
-        }
-        pos.x /= 8; pos.y /= 8; pos.z /= 8;
-
-        const scale = {
-            x: Math.hypot(ann[0] - ann[3], ann[1] - ann[4]),
-            y: Math.hypot(ann[0] - ann[9], ann[1] - ann[10]),
-            z: ann[14] - ann[2]
-        };
-
-        const angle = Math.atan2(ann[4] + ann[7] - 2 * pos.y, ann[3] + ann[6] - 2 * pos.x);
-
-        return {
-            position: pos,
-            scale,
-            rotation: { x: 0, y: 0, z: angle }
-        };
     }
 }
 

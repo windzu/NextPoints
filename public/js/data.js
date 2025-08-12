@@ -284,7 +284,6 @@ class Data {
 
         const frameDetails = Object.fromEntries(frames.map(f => [f.timestamp_ns, f]));
 
-
         // 3) 构造 sceneMetadata（去冗余）
         const sceneMetadata = {
             scene: sceneName,

@@ -1,7 +1,5 @@
-
-
-
 import { checkScene } from "./error_check.js";
+import * as THREE from './lib/three.module.js';
 import { logger } from "./log.js";
 
 
@@ -103,6 +101,19 @@ function doSaveWorldList(worldList, done) {
             annotation: w.annotation.toBoxAnnotations(),
         };
     })
+
+    // convert ann[i].annotation[j].psr.rotation from euler {x,y,z} to qunt {x,y,z,w}
+    ann.forEach(a => {
+        a.annotation.forEach(box => {
+            if (box.psr && box.psr.rotation) {
+                // use three.js to convert
+                let euler = new THREE.Euler(box.psr.rotation.x, box.psr.rotation.y, box.psr.rotation.z, 'XYZ');
+                let quaternion = new THREE.Quaternion();
+                quaternion.setFromEuler(euler);
+                box.psr.rotation = { x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w };
+            }
+        });
+    });
 
     var xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/projects/save_world_list", true);

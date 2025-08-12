@@ -48,12 +48,12 @@ function Annotation(sceneMeta, world, frameInfo) {
     this.preload = function (on_preload_finished) {
         this.on_preload_finished = on_preload_finished;
 
-        // 优先使用frameInfo中已经加载的annotation数据
+        // 优先使用 frameInfo 中已经加载的 annotation 数据
         if (this.frameInfo.annotation !== undefined && this.frameInfo.annotation !== null) {
 
             let boxes = this.frameInfo.annotation;
 
-            // 确保boxes是数组格式
+            // 确保 boxes 是数组格式
             if (!Array.isArray(boxes)) {
                 boxes = [];
             }
@@ -145,7 +145,6 @@ function Annotation(sceneMeta, world, frameInfo) {
 
     this.toBoxAnnotations = function () {
         let anns = this.boxes.map((b) => {
-            //var vertices = psr_to_xyz(b.position, b.scale, b.rotation);
             let ann = this.boxToAnn(b);
 
             if (b.annotator)
@@ -203,31 +202,6 @@ function Annotation(sceneMeta, world, frameInfo) {
         };
 
     };
-
-
-    // this.vector_to_ann = function(v){
-    //     return {
-    //         position:{
-    //             x:v[0],// + this.coordinatesOffset[0],
-    //             y:v[1],// + this.coordinatesOffset[1],
-    //             z:v[2],// + this.coordinatesOffset[2],
-    //         },
-
-
-    //         rotation:{
-    //             x:v[3],
-    //             y:v[4],
-    //             z:v[5],
-    //         },
-
-    //         scale:{
-    //             x:v[6],
-    //             y:v[7],
-    //             z:v[8],
-    //         },
-
-    //     };
-    // };
 
     this.remove_all_boxes = function () {
         if (this.boxes) {
@@ -423,12 +397,6 @@ function Annotation(sceneMeta, world, frameInfo) {
 
 
         this.proc_annotation = function (boxes) {
-
-            // boxes = this.transformBoxesByEgoPose(boxes);
-            // boxes = this.transformBoxesByOffset(boxes);
-
-            // //var boxes = JSON.parse(this.responseText);
-            //console.log(ret);
             this.boxes = this.createBoxes(boxes);  //create in future world
 
             this.webglGroup = new THREE.Group();
@@ -548,6 +516,24 @@ function Annotation(sceneMeta, world, frameInfo) {
 
     this.createOneBoxByAnn = function (annotation) {
         let b = annotation;
+
+        // make sure b is a valid annotation
+        if (!b || !b.psr || !b.psr.position || !b.psr.scale || !b.psr.rotation) {
+            console.error("Invalid annotation data", b);
+            return null;
+        }
+
+        // make sure b.psr.rotation is euler format instead of quaternion
+        if (b.psr.rotation.w !== undefined) {
+            console.warn("Annotation rotation is in quaternion format, converting to euler.");
+            let quat = new THREE.Quaternion(b.psr.rotation.x, b.psr.rotation.y, b.psr.rotation.z, b.psr.rotation.w);
+            let euler = new THREE.Euler().setFromQuaternion(quat, 'XYZ');
+            b.psr.rotation = {
+                x: euler.x,
+                y: euler.y,
+                z: euler.z
+            };
+        }
 
         let mesh = this.createCuboid(b.psr.position,
             b.psr.scale,
