@@ -13,8 +13,7 @@ class FrameInfo {
         this.sceneName = sceneName;
         this.scene = sceneName;  // 添加 scene 属性以保持兼容性
         this.frame = frame;
-        this.pcd_ext = "";
-        this.dir = "";
+        // this.dir = "";
         this.frame_index = this.sceneMeta.frames.findIndex(x => x === frame);
         this.transform_matrix = this.sceneMeta.point_transform_matrix;
 
@@ -25,11 +24,9 @@ class FrameInfo {
     }
 
     get_pcd_path() {
+        // log
+        logger.log(`get_pcd_path: ${this.sceneMeta.frameDetails[this.frame].pointcloud_url}`);
         return this.sceneMeta.frameDetails[this.frame].pointcloud_url;
-    }
-
-    get_anno_path() {
-        return `data/${this.sceneName}/label/${this.frame}.json`;
     }
 
     anno_to_boxes(text) {
@@ -186,13 +183,13 @@ class World {
             const refPose = this.data.getRefEgoPose(this.frameInfo.scene, pose);
 
             const posDelta = {
-                x: pose.translation[0] - refPose.translation[0],
-                y: pose.translation[1] - refPose.translation[1],
-                z: pose.translation[2] - refPose.translation[2]
+                x: pose.transform.translation.x - refPose.transform.translation.x,
+                y: pose.transform.translation.y - refPose.transform.translation.y,
+                z: pose.transform.translation.z - refPose.transform.translation.z
             };
 
             const rotation = new THREE.Quaternion(
-                pose.rotation[1], pose.rotation[2], pose.rotation[3], pose.rotation[0]
+                pose.transform.rotation.x, pose.transform.rotation.y, pose.transform.rotation.z, pose.transform.rotation.w
             );
 
             const trans_lidar_ego = identity;
@@ -292,32 +289,79 @@ class World {
         return new THREE.Vector3(pos.x, pos.y, pos.z).applyMatrix4(this.trans_lidar_utm);
     }
 
-    sceneRotToLidar(rotEuler) {
-        const euler = rotEuler.isEuler ? rotEuler : new THREE.Euler(rotEuler.x, rotEuler.y, rotEuler.z, "XYZ");
-        const q = new THREE.Quaternion().setFromEuler(euler);
-        const globalToLocal = new THREE.Quaternion().setFromRotationMatrix(this.trans_scene_lidar);
-        return new THREE.Euler().setFromQuaternion(q.multiply(globalToLocal), euler.order);
+    static toQuat(rot) {
+        if (!rot) return new THREE.Quaternion();           // identity
+        if (rot.isQuaternion) return rot.clone();          // 已是四元数
+        if (rot.isEuler) return new THREE.Quaternion().setFromEuler(rot);  // 从欧拉转
+        if (Array.isArray(rot) && rot.length === 4) {      // 若是 [w,x,y,z]
+            const [w, x, y, z] = rot;
+            return new THREE.Quaternion(x ?? 0, y ?? 0, z ?? 0, w ?? 1);
+        }
+        // {x,y,z,w} 对象
+        if ('x' in rot && 'y' in rot && 'z' in rot) {
+            return new THREE.Quaternion(rot.x ?? 0, rot.y ?? 0, rot.z ?? 0, rot.w ?? 1);
+        }
+        throw new Error('Unsupported rotation format: ' + JSON.stringify(rot));
     }
 
-    lidarRotToScene(rotEuler) {
-        const euler = rotEuler.isEuler ? rotEuler : new THREE.Euler(rotEuler.x, rotEuler.y, rotEuler.z, "XYZ");
-        const q = new THREE.Quaternion().setFromEuler(euler);
-        const localToGlobal = new THREE.Quaternion().setFromRotationMatrix(this.trans_lidar_scene);
-        return new THREE.Euler().setFromQuaternion(q.multiply(localToGlobal), euler.order);
+    // scene → lidar
+    sceneRotToLidarQuat(rot) {
+        const qLocal = World.toQuat(rot);
+        const qParent = (this.trans_scene_lidar?.isMatrix4)
+            ? new THREE.Quaternion().setFromRotationMatrix(this.trans_scene_lidar)
+            : new THREE.Quaternion(); // identity
+        return qLocal.multiply(qParent).normalize(); // 保持原顺序：local * parent
     }
 
-    lidarRotToUtm(rotEuler) {
-        const euler = rotEuler.isEuler ? rotEuler : new THREE.Euler(rotEuler.x, rotEuler.y, rotEuler.z, "XYZ");
-        const q = new THREE.Quaternion().setFromEuler(euler);
-        const localToGlobal = new THREE.Quaternion().setFromRotationMatrix(this.trans_lidar_utm);
-        return new THREE.Euler().setFromQuaternion(q.multiply(localToGlobal), euler.order);
+    sceneRotToLidar(rotEulerOrQuat) {
+        const order = rotEulerOrQuat?.isEuler ? rotEulerOrQuat.order : "XYZ";
+        const q = this.sceneRotToLidarQuat(rotEulerOrQuat);
+        return new THREE.Euler().setFromQuaternion(q, order);
     }
 
-    utmRotToLidar(rotEuler) {
-        const euler = rotEuler.isEuler ? rotEuler : new THREE.Euler(rotEuler.x, rotEuler.y, rotEuler.z, "XYZ");
-        const q = new THREE.Quaternion().setFromEuler(euler);
-        const globalToLocal = new THREE.Quaternion().setFromRotationMatrix(this.trans_utm_lidar);
-        return new THREE.Euler().setFromQuaternion(q.multiply(globalToLocal), euler.order);
+    // lidar → scene
+    lidarRotToSceneQuat(rot) {
+        const qLocal = World.toQuat(rot);
+        const qParent = (this.trans_lidar_scene?.isMatrix4)
+            ? new THREE.Quaternion().setFromRotationMatrix(this.trans_lidar_scene)
+            : new THREE.Quaternion(); // identity(父级未就绪时不引发异常)
+        return qLocal.multiply(qParent).normalize(); // 注意顺序：local * parent
+    }
+
+    lidarRotToScene(rotEulerOrQuat) {
+        const eulerOrder = rotEulerOrQuat?.isEuler ? rotEulerOrQuat.order : "XYZ";
+        const q = this.lidarRotToSceneQuat(rotEulerOrQuat);
+        return new THREE.Euler().setFromQuaternion(q, eulerOrder);
+    }
+
+    // lidar → UTM
+    lidarRotToUtmQuat(rot) {
+        const qLocal = World.toQuat(rot);
+        const qParent = (this.trans_lidar_utm?.isMatrix4)
+            ? new THREE.Quaternion().setFromRotationMatrix(this.trans_lidar_utm)
+            : new THREE.Quaternion();
+        return qLocal.multiply(qParent).normalize(); // local * parent
+    }
+
+    lidarRotToUtm(rotEulerOrQuat) {
+        const order = rotEulerOrQuat?.isEuler ? rotEulerOrQuat.order : "XYZ";
+        const q = this.lidarRotToUtmQuat(rotEulerOrQuat);
+        return new THREE.Euler().setFromQuaternion(q, order);
+    }
+
+    // UTM → lidar
+    utmRotToLidarQuat(rot) {
+        const qLocal = World.toQuat(rot);
+        const qParent = (this.trans_utm_lidar?.isMatrix4)
+            ? new THREE.Quaternion().setFromRotationMatrix(this.trans_utm_lidar)
+            : new THREE.Quaternion();
+        return qLocal.multiply(qParent).normalize(); // local * parent
+    }
+
+    utmRotToLidar(rotEulerOrQuat) {
+        const order = rotEulerOrQuat?.isEuler ? rotEulerOrQuat.order : "XYZ";
+        const q = this.utmRotToLidarQuat(rotEulerOrQuat);
+        return new THREE.Euler().setFromQuaternion(q, order);
     }
 }
 
