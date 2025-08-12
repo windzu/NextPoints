@@ -262,53 +262,133 @@ class Data {
     };
 
     async readSceneMetaData(sceneName) {
-        // debug
         console.log("read scene metadata", sceneName);
-        try {
-            const response = await fetch(`/api/projects/${sceneName}/metadata`);
-            if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+        const res = await fetch(`/api/projects/${sceneName}/metadata`);
+        if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
 
-            const data = await response.json();
-            const frames = data.frames.map(f => f.timestamp_ns);
-            const frameDetails = Object.fromEntries(data.frames.map(f => [f.timestamp_ns, f]));
+        const data = await res.json();
 
-            const sceneMetadata = {
-                scene: sceneName,
-                frames,
-                frameDetails,
-                camera: [],
-                boxtype: "psr",
-                point_transform_matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
-                calib: { camera: {} }
+        // 1) 强校验 main_channel
+        const main = data.main_channel;
+        if (!main) throw new Error(`[metadata] main_channel missing for scene=${sceneName}`);
+
+        // 2) 构造 frameDetails（仅以 timestamp_ns 为键），并强制注入 pointcloud_url
+        const frames = (data.frames ?? []).map(f => {
+            if (!f?.lidars || typeof f.lidars[main] !== "string" || !f.lidars[main]) {
+                throw new Error(
+                    `[metadata] missing lidar for main_channel="${main}" at ts=${f?.timestamp_ns} in scene=${sceneName}`
+                );
+            }
+            return { ...f, pointcloud_url: f.lidars[main] };
+        });
+
+        const frameDetails = Object.fromEntries(frames.map(f => [f.timestamp_ns, f]));
+
+
+        // 3) 构造 sceneMetadata（去冗余）
+        const sceneMetadata = {
+            scene: sceneName,
+            main_channel: main,
+            frames: frames.map(f => f.timestamp_ns),
+            frameDetails,
+            camera: [], // 如需相机再填；与本需求无关可留空
+            boxtype: "psr",
+            point_transform_matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            calib: { camera: {} }, // 与点云无关，保持骨架
+            summary: {
+                frame_count: data.frame_count,
+                start_timestamp_ns: data.start_timestamp_ns,
+                end_timestamp_ns: data.end_timestamp_ns,
+                duration_seconds: data.duration_seconds
+            }
+        };
+
+        // 3) 解析 calibration：仅按你的定义读取
+        const calibrations = data.calibration ?? {};
+        for (const [channel, calib] of Object.entries(calibrations)) {
+            const cfg = calib?.camera_config;
+            if (!cfg) continue; // 只收相机
+
+            const name = cfg.name || channel;
+
+            // --- 内参矩阵 intrinsic（3x3）
+            // intrinsic = [[fx, skew, cx],
+            //      [0 ,  fy , cy],
+            //      [0 ,  0  , 1 ]]
+            const intrinsic = [
+                cfg.intrinsic.fx, cfg.intrinsic.skew ?? 0, cfg.intrinsic.cx,
+                0, cfg.intrinsic.fy, cfg.intrinsic.cy,
+                0, 0, 1
+            ];
+
+            // --- 畸变参数（按给定结构打包，前端自定义使用方式）
+            const distortion = {
+                k1: cfg.distortion_coefficients.k1,
+                k2: cfg.distortion_coefficients.k2,
+                p1: cfg.distortion_coefficients.p1,
+                p2: cfg.distortion_coefficients.p2,
+                k3: cfg.distortion_coefficients.k3 ?? 0,
+                k4: cfg.distortion_coefficients.k4 ?? 0,
+                k5: cfg.distortion_coefficients.k5 ?? 0
             };
 
-            if (data.calibration) {
-                for (const [sensorId, calib] of Object.entries(data.calibration)) {
-                    if (calib.camera_config) {
-                        sceneMetadata.camera.push(sensorId);
-                        sceneMetadata.calib.camera[sensorId] = {
-                            ...calib,
-                            intrinsic: calib.camera_config.intrinsic,
-                            extrinsic: this._createExtrinsicMatrix(calib.translation, calib.rotation)
-                        };
-                    }
-                }
-            }
+            // --- 外参，从 calib.pose 计算（支持 quat / euler，两者其一即可）
+            const extrinsic = this._poseToExtrinsic(calib.pose);
 
-            this.meta[sceneName] = sceneMetadata;
-            return sceneMetadata;
-        } catch (err) {
-            console.error("Failed to read scene metadata:", err);
-            throw err;
+            sceneMetadata.camera.push(channel);
+            sceneMetadata.calib.camera[channel] = {
+                channel,
+                name,                     // 相机名称
+                width: cfg.width,
+                height: cfg.height,
+                model: cfg.model,          // "pinhole" / "fisheye" / "omnidirectional"
+                intrinsic,                 // 3x3 展平
+                distortion,                // 原样打包
+                extrinsic,                 // 4x4 展平
+            };
         }
+
+        this.meta[sceneName] = sceneMetadata;
+        return sceneMetadata;
     }
 
-    _createExtrinsicMatrix = (translation = [0, 0, 0]) => [
-        [1, 0, 0, translation[0]],
-        [0, 1, 0, translation[1]],
-        [0, 0, 1, translation[2]],
-        [0, 0, 0, 1],
-    ];
+    /**
+     * 将 Pose 转为 4x4 外参（展平为长度16数组，行主序）
+     * 期望 Pose 结构：{ parent_frame_id, child_frame_id, transform: { translation:{x,y,z}, rotation:{...} } }
+     * rotation 支持：
+     *  - 四元数: {w,x,y,z}
+     */
+    _poseToExtrinsic(pose) {
+        if (!pose?.transform) return null;
+        const t = pose.transform.translation ?? { x: 0, y: 0, z: 0 };
+        const r = pose.transform.rotation ?? {};
+
+        // 构出 3x3 R
+        let R;
+        if (typeof r.w === "number" && typeof r.x === "number") {
+            // quaternion -> R
+            const { w, x, y, z } = r;
+            const xx = x * x, yy = y * y, zz = z * z, ww = w * w;
+            const xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
+            R = [
+                1 - 2 * (yy + zz), 2 * (xy - wz), 2 * (xz + wy),
+                2 * (xy + wz), 1 - 2 * (xx + zz), 2 * (yz - wx),
+                2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (xx + yy)
+            ];
+        } else {
+            console.warn("Unsupported rotation format, expected quaternion ", r);
+            return null;
+        }
+
+        // 4x4: [R|t; 0 0 0 1]
+        return [
+            R[0], R[1], R[2], t.x ?? 0,
+            R[3], R[4], R[5], t.y ?? 0,
+            R[6], R[7], R[8], t.z ?? 0,
+            0, 0, 0, 1
+        ];
+    }
+
 }
 
 export { Data };
