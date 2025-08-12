@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict
 from pydantic import BaseModel, field_validator
 
-from base_model import Position, Rotation, Scale
+from app.models.base_model import Position, Rotation, Scale
 
 class PSR(BaseModel):
     """位置、缩放、旋转信息"""
@@ -18,8 +18,8 @@ class AnnotationItem(BaseModel):
     psr: PSR
 
 
-class WorldAnnotation(BaseModel):
-    """单个世界帧的标注数据模型"""
+class FrameAnnotation(BaseModel):
+    """单帧的标注数据模型"""
     scene: str  # 项目名称
     frame: str  # 帧ID
     annotation: Optional[List[AnnotationItem]] = []

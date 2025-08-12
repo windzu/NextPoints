@@ -1,5 +1,5 @@
 import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
+from botocore.exceptions import ClientError, NoCredentialsError,EndpointConnectionError
 from typing import List, Dict, Optional, Tuple
 import os
 import re
@@ -63,6 +63,34 @@ class S3Service:
         except Exception as e:
             return False, f"Connection error: {e}"
     
+    def object_exists(self, bucket: str, key: str, *, version_id: Optional[str] = None) -> bool:
+        """
+        判断指定对象是否存在（精确到对象，不是前缀）。
+        存在 -> True；不存在 -> False；权限/网络等异常 -> 抛出异常。
+
+        Args:
+            bucket: 桶名
+            key: 对象键（不要以'/'开头，S3允许但不推荐）
+            version_id: 开启版本控制时，指定版本检查（可选）
+        """
+        try:
+            kwargs = {"Bucket": bucket, "Key": key.lstrip("/")}
+            if version_id:
+                kwargs["VersionId"] = version_id
+            self.s3_client.head_object(**kwargs)
+            return True
+        except ClientError as e:
+            # 典型不存在：HTTP 404 或 Error Code 为 '404'/'NoSuchKey'/'NotFound'
+            code = str(e.response.get("Error", {}).get("Code", ""))
+            status = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if code in ("404", "NoSuchKey", "NotFound") or status == 404:
+                return False
+            # 其他错误（403/网络/区域等）交由调用方处理
+            raise
+        except EndpointConnectionError:
+            # 端点连不通（MinIO/S3 网络问题）
+            raise
+
     def list_objects(self, bucket_name: str, prefix: str = "") -> List[Dict]:
         """
         列出存储桶中的对象

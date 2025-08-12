@@ -1,10 +1,10 @@
 from typing import Optional, List, Dict
-from prometheus_client import Enum
+from enum import Enum
 from pydantic import BaseModel
 
-from base_model import Pose
+from app.models.base_model import Pose
 
-class CameraModel(Enum):
+class CameraModel(str, Enum):
     PINHOLE = "pinhole"
     FISHEYE = "fisheye"
     OMNIDIRECTIONAL = "omnidirectional"
@@ -49,5 +49,6 @@ class CalibrationMetadata(BaseModel):
     pose : Pose
     camera_config: Optional[CameraConfig] = None  # 包含相机内参、畸变系数等
     ignore_areas: List[IgnoreArea] = []  # 可选，忽略区域列表
+
 
 

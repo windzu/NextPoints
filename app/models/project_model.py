@@ -40,8 +40,6 @@ class Project(SQLModel, table=True):
     use_presigned_urls: bool = Field(default=False)
     expiration_minutes: int = Field(default=60)
 
-    s3_root_path: str  # 项目数据的根路径
-
 
 
 # Projects Model

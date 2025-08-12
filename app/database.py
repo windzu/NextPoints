@@ -43,5 +43,6 @@ def check_and_create_tables():
             logger.error(f"Failed to create tables: {create_error}")
             raise
 
-def get_session() -> Session:
-    return Session(engine)
+def get_session():
+    with Session(engine) as session:
+        yield session

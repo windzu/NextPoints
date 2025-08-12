@@ -7,3 +7,7 @@ from pydantic import BaseModel
 
 class PointCloudRequest(BaseModel):
     points: List[List[float]]  # N x 3 数组，每个点是 [x, y, z]
+
+class FrameRequest(BaseModel):
+    scene: str  # 项目名称
+    frame: str  # 帧ID

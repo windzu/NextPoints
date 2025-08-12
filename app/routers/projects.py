@@ -12,7 +12,7 @@ from app.models.project_model import (
     ProjectStatus
 )
 from app.models.meta_data_model import ProjectMetadataResponse
-from app.models.annotation_model import WorldAnnotation
+from app.models.annotation_model import FrameAnnotation
 from app.models.export_model import (
     NuScenesExportRequest, ExportTaskResponse, ExportTaskStatus,
     ExportStatus, ExportTaskList
@@ -54,7 +54,7 @@ async def create_project(
 
 @router.post("/save_world_list", status_code=status.HTTP_200_OK)
 async def save_world_list(
-    request: List[WorldAnnotation],
+    request: List[FrameAnnotation],
     session: Session = Depends(get_session)
 ):
     """

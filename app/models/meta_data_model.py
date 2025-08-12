@@ -4,10 +4,7 @@ from pydantic import BaseModel
 from app.models.project_model import ProjectResponse
 from app.models.annotation_model import AnnotationItem
 from app.models.calibration_model import CalibrationMetadata
-from base_model import Pose
-
-
-
+from app.models.base_model import Pose
 
 class FrameMetadata(BaseModel):
     """帧元数据响应模型"""
@@ -29,6 +26,7 @@ class ProjectMetadataResponse(BaseModel):
     start_timestamp_ns: str
     end_timestamp_ns: str
     duration_seconds: float
+    main_channel: str
 
     # 标定信息（字典结构）
     calibration: Dict[str, CalibrationMetadata]

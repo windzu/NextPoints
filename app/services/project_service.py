@@ -1,17 +1,18 @@
 from sqlmodel import Session
 from fastapi import APIRouter, HTTPException, Depends, status
 from collections import defaultdict
+import posixpath
 from pathlib import Path
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List,Set,Tuple
 from botocore.exceptions import ClientError
 from sqlmodel import select
 
 
 from app.services.s3_service import S3Service
 from app.models.project_model import Project,ProjectResponse,ProjectCreateRequest,ProjectStatus
-from app.models.meta_data_model import FrameMetadata,CalibrationMetadata,ProjectMetadataResponse
-from app.models.annotation_model import AnnotationItem,WorldAnnotation
+from app.models.meta_data_model import FrameMetadata,CalibrationMetadata,ProjectMetadataResponse,Pose
+from app.models.annotation_model import AnnotationItem,FrameAnnotation
 
 from app.database import get_session
 
@@ -59,7 +60,6 @@ def create_project(
         project = Project(
             name=request.project_name,
             description=request.description,
-            s3_root_path=f"s3://{request.bucket_name}/{request.bucket_prefix or ''}",
             storage_type=request.storage_type,
             storage_title=request.storage_title,
             bucket_name=request.bucket_name,
@@ -77,22 +77,10 @@ def create_project(
         session.commit()
         session.refresh(project)
 
-        # 3. check meta.json 是否存在
-        # (Check if meta.json exists)
-        meta_key = str(Path(project.bucket_prefix or "") / "meta.json")
-        try:
-            meta_content = s3_service.read_json_object(project.bucket_name, meta_key)
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchKey':
-                # 如果不存在，生成并上传 meta.json
-                # (If not exists, generate and upload meta.json)
-                meta_content = _generate_and_upload_meta_json(project, s3_service)
-            else:
-                # 处理其他可能的 S3 错误（如权限问题）
-                raise HTTPException(status_code=500, detail=f"S3 error reading meta.json: {e}")
+        # 3. use get_project_metadata to check project metadata
+        get_project_metadata(project.name, session)
 
-
-
+        # 4. return project response
         return ProjectResponse(
             id=project.id,
             name=project.name,
@@ -134,101 +122,19 @@ def get_project_metadata(
         region_name=project.region_name
     )
 
-    # # 3. 尝试读取 meta.json，如果失败则生成它
-    # meta_key = str(Path(project.bucket_prefix or "") / "meta.json")
-    # try:
-    #     meta_content = s3_service.read_json_object(project.bucket_name, meta_key)
-    # except ClientError as e:
-    #     if e.response['Error']['Code'] == 'NoSuchKey':
-    #         meta_content = _generate_and_upload_meta_json(project, s3_service)
-    #     else:
-    #         # Handle other potential S3 errors (e.g., permissions)
-    #         raise HTTPException(status_code=500, detail=f"S3 error reading meta.json: {e}")
-
     # 3. 每次获取元数据时都生成 meta.json
     # 这是为了确保数据是最新的，避免缓存问题
     try:
-        meta_content = _generate_and_upload_meta_json(project, s3_service)
+        # meta_content = _generate_and_upload_meta_json(project, s3_service)
+        project_meta_data = _generate_project_meta_data(project, s3_service)
+        return project_meta_data
     except Exception as e:
         # 捕获生成 meta.json 时的任何异常
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate or read meta.json: {str(e)}"
+            detail=f"Failed to generate_project_meta_data: {str(e)}"
         )
 
-    # --- 从这里开始，我们保证已经拿到了 meta_content ---
-    # 4. 转换元数据：用预签名URL替换S3 Keys
-    frames_metadata_list = []
-    for frame_data in meta_content.get("frames", []):
-        # 为点云生成预签名URL
-        pointcloud_url = s3_service.generate_presigned_url(
-            project.bucket_name, frame_data["pointcloud_key"], project.expiration_minutes
-        )
-
-        # 为所有图像生成预签名URL
-        image_urls = {}
-        if "image_keys" in frame_data:
-            for cam_id, image_key in frame_data["image_keys"].items():
-                url = s3_service.generate_presigned_url(
-                    project.bucket_name, image_key, project.expiration_minutes
-                )
-                if url:
-                    image_urls[cam_id] = url
-        
-        # 处理annotation数据，确保格式正确
-        annotation_data = frame_data.get("annotation", [])
-        if not isinstance(annotation_data, list):
-            annotation_data = []
-        
-        # 验证annotation数据格式
-        validated_annotations = []
-        for ann in annotation_data:
-            try:
-                validated_annotations.append(AnnotationItem(**ann))
-            except Exception as e:
-                print(f"Warning: Invalid annotation item in frame {frame_data['timestamp_ns']}: {e}")
-                continue
-        
-        frames_metadata_list.append(
-            FrameMetadata(
-                # 注意：Frame ID 现在不存在于 meta.json 中，这是一个设计选择。
-                # 如果需要，生成脚本也可以从文件名或其他地方推断一个唯一标识符。
-                # 这里我们用时间戳的哈希值或索引作为临时ID，或设为0。
-                id=hash(frame_data["timestamp_ns"]),
-                timestamp_ns=frame_data["timestamp_ns"],
-                prev_timestamp_ns=frame_data.get("prev_timestamp_ns"),
-                next_timestamp_ns=frame_data.get("next_timestamp_ns"),
-                pointcloud_url=pointcloud_url or "",
-                images=image_urls,
-                pose=frame_data.get("pose"),
-                annotation=validated_annotations,
-                # annotation_status 不再由帧管理
-            )
-        )
-
-    # 5. 组装并返回最终的响应对象
-    # 项目状态从数据库获取，元数据从JSON文件获取
-    project_response = ProjectResponse(
-        id=project.id,
-        name=project.name,
-        description=project.description,
-        status=project.status,
-        created_at=project.created_at.isoformat(),  # 转成字符串
-    )
-    summary = meta_content.get("summary", {})
-    
-    return ProjectMetadataResponse(
-        project=project_response,
-        frame_count=summary.get("frame_count", 0),
-        start_timestamp_ns=summary.get("start_timestamp_ns"),
-        end_timestamp_ns=summary.get("end_timestamp_ns"),
-        duration_seconds=summary.get("duration_seconds", 0.0),
-        calibration={
-            sensor_id: CalibrationMetadata(**calib_dict)
-            for sensor_id, calib_dict in meta_content.get("calibration", {}).items()
-        },
-        frames=frames_metadata_list
-    )
 
 def get_check_label(
     project_name: str,
@@ -243,7 +149,7 @@ def get_check_label(
             select(Project).where(Project.name == project_name)
         ).first()
 
-        # 2. build WorldAnnotation list from label files
+        # 2. build FrameAnnotation list from label files
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         s3_service = S3Service(
@@ -266,7 +172,7 @@ def get_check_label(
                 annotation_data = s3_service.read_json_object(project.bucket_name, key)
                 if not isinstance(annotation_data, list):
                     annotation_data = []  # 确保是列表格式
-                annotations.append(WorldAnnotation(
+                annotations.append(FrameAnnotation(
                     scene=project.name,
                     frame=frame_id,
                     annotation=[AnnotationItem(**item) for item in annotation_data]
@@ -288,7 +194,7 @@ def get_check_label(
         )
 
 def save_world_list(
-    request: List[WorldAnnotation],
+    request: List[FrameAnnotation],
     session: Session = Depends(get_session)
 ):
     """
@@ -370,109 +276,229 @@ def save_world_list(
             detail=f"Failed to save annotations: {str(e)}"
         )
 
-def _generate_and_upload_meta_json(
-    project: Project, 
-    s3_service: S3Service
-) -> Dict[str, Any]:
+def _generate_project_meta_data(
+    project: Project,
+    s3_service: S3Service,
+    main_channel: Optional[str] = "lidar-fusion"
+) -> ProjectMetadataResponse:
     """
-    通过扫描S3生成meta.json文件,上传它,并返回其内容。
-    这是一个耗时操作，只应在首次访问项目时调用一次。
+    目录约定（均在 root = bucket_prefix 下）：
+      - calib/<channel>.json
+      - lidar/<lidar_channel>/<timestamp>.pcd
+      - camera/<camera_channel>/<timestamp>.jpg
+      - ego_pose/<timestamp>.json
     """
-    print(f"Meta.json not found for project {project.id}. Generating now...")
-    prefix = project.bucket_prefix or ""
-    all_objects = s3_service.list_objects(project.bucket_name, prefix)
-
-    # --- Step 1: Parse all S3 files (similar to original sync logic) ---
-    frames_data: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"image_keys": {}, "annotation": []})
-    calib_files = {}
-
-    for obj in all_objects:
-        key = obj['key']
-        relative_key = key[len(prefix):].lstrip('/') if prefix else key
-        path_parts = Path(relative_key).parts
+    def _safe_join(*parts: str, strip_slash=True) -> str:
+        """
+        安全拼接 POSIX 风格路径，自动去除空值和多余斜杠。
         
-        if not path_parts or path_parts[-1] == "meta.json":
-            continue
+        Args:
+            *parts: 路径片段（可以包含空字符串或 None）
+            strip_slash: 是否去掉每个片段的首尾斜杠（默认 True）
+        
+        Returns:
+            拼接后的路径字符串
+        """
+        cleaned_parts = []
+        for p in parts:
+            if not p:  # 过滤 None / 空字符串
+                continue
+            if strip_slash:
+                p = p.strip("/")  # 去掉首尾斜杠，避免重复
+            cleaned_parts.append(p)
+        
+        return posixpath.join(*cleaned_parts)
 
+    def _stem(filename: str) -> str:
+        """返回去扩展名后的文件名"""
+        base = filename.rsplit("/", 1)[-1]
+        return base.rsplit(".", 1)[0] if "." in base else base
+
+    def _is_ext(key: str, *exts: str) -> bool:
+        k = key.lower()
+        return any(k.endswith(e.lower()) for e in exts)
+
+    def _ns_to_int(ts_ns: str) -> int:
+        return int(ts_ns)
+
+    def _project_to_response(project: Project) -> ProjectResponse:
+        return ProjectResponse(
+            id=project.id,
+            name=project.name,
+            description=project.description,
+            status=ProjectStatus(project.status),
+            created_at=project.created_at.isoformat(),
+        )
+
+    def _as_url(s3: S3Service, project: Project, bucket_key: str) -> str:
+        """如需 URL，可用该函数替换 _as_key 的调用"""
+        return s3.get_object_url(
+            bucket_name=project.bucket_name,
+            object_key=bucket_key,
+            use_presigned=project.use_presigned_urls,
+            expiration=project.expiration_minutes * 60,
+        )
+
+
+    bucket = project.bucket_name
+    root = _safe_join(project.bucket_prefix or "")
+
+    calib_prefix   = _safe_join(root, "calib")
+    lidar_prefix   = _safe_join(root, "lidar")
+    camera_prefix  = _safe_join(root, "camera")
+    ego_pose_prefix= _safe_join(root, "ego_pose")
+
+    # 1) 读 calib：严格校验为 CalibrationMetadata
+    calibration: Dict[str, CalibrationMetadata] = {}
+    for obj in s3_service.list_all_objects(bucket, calib_prefix):
+        key = obj.get("Key") or obj.get("key")
+        if not key or not _is_ext(key, ".json"):
+            continue
+        raw = s3_service.read_json_object(bucket, key)
+        meta = CalibrationMetadata.model_validate(raw)  # 不一致直接抛错
+        chan = meta.channel or _stem(key)  # 以 JSON 内 channel 为准，缺失则用文件名
+        # 如需防止重复 channel 直接报错，可启用以下检查
+        # if chan in calibration:
+        #     raise ValueError(f"重复的 calibration channel: {chan}")
+        calibration[chan] = meta
+
+    # 2) 枚举 lidar/camera 子通道及各自的时间戳索引
+    lidar_channels: Dict[str, Set[str]] = {}   # channel -> {timestamp_ns}
+    lidar_index: Dict[Tuple[str, str], str] = {}  # (channel, ts) -> key
+
+    for obj in s3_service.list_all_objects(bucket, lidar_prefix):
+        key = obj.get("Key") or obj.get("key")
+        if not key or not _is_ext(key, ".pcd"):
+            continue
+        # 结构：lidar/<channel>/<timestamp>.pcd
+        rel = key[len(lidar_prefix):].lstrip("/")  # <channel>/<file>
+        if "/" not in rel:
+            # 忽略不规范
+            continue
+        channel, fname = rel.split("/", 1)
+        ts = _stem(fname)
+        lidar_channels.setdefault(channel, set()).add(ts)
+        lidar_index[(channel, ts)] = key
+
+    camera_channels: Dict[str, Set[str]] = {}
+    camera_index: Dict[Tuple[str, str], str] = {}
+
+    for obj in s3_service.list_all_objects(bucket, camera_prefix):
+        key = obj.get("Key") or obj.get("key")
+        if not key or not _is_ext(key, ".jpg", ".jpeg", ".png"):
+            continue
+        # 结构：camera/<channel>/<timestamp>.<ext>
+        rel = key[len(camera_prefix):].lstrip("/")
+        if "/" not in rel:
+            continue
+        channel, fname = rel.split("/", 1)
+        ts = _stem(fname)
+        camera_channels.setdefault(channel, set()).add(ts)
+        camera_index[(channel, ts)] = key
+
+    # ego_pose：ts -> key
+    ego_pose_index: Dict[str, str] = {}
+    for obj in s3_service.list_all_objects(bucket, ego_pose_prefix):
+        key = obj.get("Key") or obj.get("key")
+        if not key or not _is_ext(key, ".json"):
+            continue
+        ts = _stem(key)
+        if "/" in ts:
+            ts = _stem(ts.split("/")[-1])
+        ego_pose_index[ts] = key
+
+    if not lidar_channels:
+        raise ValueError("未在 lidar/ 目录下发现任何激光通道数据。")
+
+    # 3) 选择 main_channel
+    def pick_main_channel() -> str:
+        if main_channel in lidar_channels:
+            return main_channel
+        if len(lidar_channels) == 1:
+            return next(iter(lidar_channels.keys()))
+        return sorted(lidar_channels.keys())[0]
+
+    main_channel = pick_main_channel()
+    baseline_ts = sorted(lidar_channels[main_channel], key=lambda x: _ns_to_int(x))
+
+    if not baseline_ts:
+        raise ValueError(f"主通道 {main_channel} 下未发现任何 .pcd 帧。")
+
+    # 4) 构建 frames：以主通道时间戳作为帧集合
+    frames: List[FrameMetadata] = []
+    for idx, ts in enumerate(baseline_ts):
+        # lidars: 收集同时间戳的所有激光通道（至少包含 main_channel）
+        lidars: Dict[str, str] = {}
+        for ch in lidar_channels.keys():
+            key = lidar_index.get((ch, ts))
+            if key:
+                lidars[ch] = _as_url(s3_service, project, key)
+        if main_channel not in lidars:
+            # 按理不会发生（baseline 来源于 main_channel），严防一致性问题
+            raise ValueError(f"时间戳 {ts} 缺少主通道 {main_channel} 的点云。")
+
+        # images: 收集同时间戳的所有相机图片（可空）
+        images: Dict[str, str] = {}
+        for ch in camera_channels.keys():
+            key = camera_index.get((ch, ts))
+            if key:
+                images[ch] = _as_url(s3_service, project, key)
+
+        # ego pose：可空；若存在严格校验为 Pose
+        pose: Optional[Pose] = None
+        pose_key = ego_pose_index.get(ts)
+        if pose_key:
+            pose_raw = s3_service.read_json_object(bucket, pose_key)
+            pose = Pose.model_validate(pose_raw)  # 不一致直接抛错
+
+        prev_ts = baseline_ts[idx - 1] if idx > 0 else ""
+        next_ts = baseline_ts[idx + 1] if idx < len(baseline_ts) - 1 else ""
+
+        # annotation: 可空；若存在严格校验为 AnnotationItem 列表
+        annotation: Optional[List[AnnotationItem]] = None
+        label_key = _safe_join(root, "label", f"{ts}.json")
         try:
-            if path_parts[0] == 'lidar':
-                timestamp = Path(path_parts[-1]).stem
-                frames_data[timestamp]['pointcloud_key'] = key
-            elif path_parts[0] == 'camera':
-                timestamp = Path(path_parts[-1]).stem
-                cam_id = path_parts[1]
-                frames_data[timestamp]['image_keys'][cam_id] = key
-            elif path_parts[0] == 'ego_pose':
-                timestamp = Path(path_parts[-1]).stem
-                # Directly read and embed pose data
-                pose_content = s3_service.read_json_object(project.bucket_name, key)
-                frames_data[timestamp]['pose'] = pose_content
-            elif path_parts[0] == 'label':
-                timestamp = Path(path_parts[-1]).stem
-                # Directly read and embed annotation data
-                try:
-                    annotation_content = s3_service.read_json_object(project.bucket_name, key)
-                    # 确保annotation是列表格式，如果为空则设为空列表
-                    if annotation_content is None:
-                        annotation_content = []
-                    elif not isinstance(annotation_content, list):
-                        print(f"Warning: Annotation file {key} is not a list, setting to empty list")
-                        annotation_content = []
-                    frames_data[timestamp]['annotation'] = annotation_content
-                except Exception as e:
-                    print(f"Warning: Could not read annotation file {key}: {e}")
-                    frames_data[timestamp]['annotation'] = []
-            elif path_parts[0] == 'calib':
-                sensor_id = Path(path_parts[-1]).stem
-                calib_content = s3_service.read_json_object(project.bucket_name, key)
-                calib_files[sensor_id] = calib_content
-        except Exception as e:
-            print(f"Warning: Skipping file {key} due to parsing error: {e}")
-            continue
-            
-    # --- Step 2: Assemble and Sort Frames ---
-    sorted_timestamps = sorted(frames_data.keys())
-    frames_list = []
-    for ts in sorted_timestamps:
-        if 'pointcloud_key' in frames_data[ts]:
-            frames_list.append({
-                "timestamp_ns": ts,
-                **frames_data[ts]
-            })
+            label_data = s3_service.read_json_object(bucket, label_key)
+            if isinstance(label_data, list):
+                annotation = [AnnotationItem.model_validate(item) for item in label_data]
+            else:
+                raise ValueError(f"标注数据 {label_key} 格式错误，应为列表。")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                # 如果没有找到标注文件，则 annotation 为空
+                annotation = None
+            else:
+                raise ValueError(f"读取标注文件 {label_key} 失败: {e}")
 
-    # --- Step 3: Add prev/next links ---
-    for i, frame in enumerate(frames_list):
-        frame["prev_timestamp_ns"] = frames_list[i-1]["timestamp_ns"] if i > 0 else None
-        frame["next_timestamp_ns"] = frames_list[i+1]["timestamp_ns"] if i < len(frames_list) - 1 else None
-        
-    # --- Step 4: Calculate Summary ---
-    frame_count = len(frames_list)
-    start_ts, end_ts, duration_sec = None, None, 0.0
-    if frame_count > 0:
-        start_ts = frames_list[0]["timestamp_ns"]
-        end_ts = frames_list[-1]["timestamp_ns"]
-        if frame_count > 1:
-            duration_sec = (int(end_ts) - int(start_ts)) / 1_000_000_000.0
-            
-    # --- Step 5: Assemble Final meta.json Content ---
-    meta_content = {
-        "meta_version": "1.0",
-        "summary": {
-            "project_name": project.name,
-            "description": project.description,
-            "frame_count": frame_count,
-            "start_timestamp_ns": start_ts,
-            "end_timestamp_ns": end_ts,
-            "duration_seconds": round(duration_sec, 3),
-            "sensors_present": list(calib_files.keys())
-        },
-        "calibration": calib_files,
-        "frames": frames_list
-    }
+        frames.append(
+            FrameMetadata(
+                id=idx,  # 连续编号
+                timestamp_ns=ts,
+                prev_timestamp_ns=prev_ts,
+                next_timestamp_ns=next_ts,
+                lidars=lidars,
+                images=images or None,
+                pose=pose,
+                annotation=annotation,
+            )
+        )
 
-    # --- Step 6: Upload to S3 ---
-    meta_key = str(Path(prefix) / "meta.json")
-    s3_service.upload_json_object(project.bucket_name, meta_key, meta_content)
-    print(f"Successfully generated and uploaded meta.json to s3://{project.bucket_name}/{meta_key}")
-    
-    return meta_content
+    # 5) 摘要
+    start_ts = baseline_ts[0]
+    end_ts = baseline_ts[-1]
+    duration_seconds = max(0.0, (_ns_to_int(end_ts) - _ns_to_int(start_ts)) / 1e9)
+
+
+    project_meta_response = ProjectMetadataResponse(
+        project=_project_to_response(project),
+        frame_count=len(frames),
+        start_timestamp_ns=start_ts,
+        end_timestamp_ns=end_ts,
+        duration_seconds=duration_seconds,
+        main_channel=main_channel,
+        calibration=calibration,
+        frames=frames,
+    )
+
+    # 6) 组装返回
+    return project_meta_response
