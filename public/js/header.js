@@ -1,4 +1,3 @@
-
 import { saveWorldList } from "./save.js";
 
 var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObjectSelected, onCameraChanged) {
@@ -118,6 +117,26 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
             this.onCameraChanged(e);
         };
     }
+
+    // Helper: get current selected project name from any selector
+    this.getSelectedProjectName = function () {
+        for (const key of Object.keys(this.projectSelectors)) {
+            const sel = this.projectSelectors[key];
+            if (sel && sel.value) return sel.value;
+        }
+        // Fallback to current loaded world
+        if (this.data && this.data.world && this.data.world.frameInfo) {
+            return this.data.world.frameInfo.scene;
+        }
+        return null;
+    };
+
+    // Helper: clear all project selections (reset to default option)
+    this.clearProjectSelection = function () {
+        Object.values(this.projectSelectors).forEach(sel => {
+            if (sel) sel.selectedIndex = 0;
+        });
+    };
 
     this.setObject = function (id) {
         this.objectSelectorUi.value = id;
