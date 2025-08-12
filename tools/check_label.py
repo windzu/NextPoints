@@ -4,7 +4,7 @@ import sys
 import numpy as np
 from typing import List, Optional, Dict, Union
 
-from app.models.annotation_model import WorldAnnotation, AnnotationItem, PSR
+from app.models.annotation_model import FrameAnnotation, AnnotationItem, PSR
 
 
 def get_labels():
@@ -78,7 +78,7 @@ class LabelChecker:
         path (str): scene path
     """
 
-    def __init__(self, annotations: List[WorldAnnotation]):
+    def __init__(self, annotations: List[FrameAnnotation]):
         self.annotations = annotations
 
         self.build_labels()
