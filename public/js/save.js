@@ -54,9 +54,6 @@ var saveDelayTimer = null;
 var pendingSaveList = [];
 
 function saveWorldList(worldList) {
-
-    //pendingSaveList = pendingSaveList.concat(worldList);
-
     worldList.forEach(w => {
         if (!pendingSaveList.includes(w))
             pendingSaveList.push(w);
@@ -99,8 +96,6 @@ function doSaveWorldList(worldList, done) {
         }
     }
 
-
-    console.log(worldList.length, "frames");
     let ann = worldList.map(w => {
         return {
             scene: w.frameInfo.scene,
@@ -108,11 +103,6 @@ function doSaveWorldList(worldList, done) {
             annotation: w.annotation.toBoxAnnotations(),
         };
     })
-
-    // debug
-    console.log("[Save] Serialized annotation data (preview):", ann.slice(0, 2)); // 仅预览前两个，防止太长
-    const payload = JSON.stringify(ann);
-    console.log("[Save] Serialized payload size:", payload.length, "bytes");
 
     var xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/projects/save_world_list", true);
@@ -139,8 +129,12 @@ function doSaveWorldList(worldList, done) {
         // end of state change: it can be after some time (async)
     };
 
+    // debug
+    console.log("[Save] Sending annotation data to server:", ann.slice(0, 2)); // 仅预览前两个，防止太长
+
     var b = JSON.stringify(ann);
-    //console.log(b);
+
+
     xhr.send(b);
 }
 
