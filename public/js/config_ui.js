@@ -63,6 +63,50 @@ class ConfigUi {
             return true;
         },
 
+        // New: Delete current project
+        "#cfg-delete-current-project": async (event) => {
+            const header = this.editor.header;
+            const projectName = header.getSelectedProjectName?.();
+            if (!projectName) {
+                alert("Please select a project first.");
+                return true;
+            }
+
+            // Confirm via InfoBox
+            const message = `Delete project "${projectName}"? This removes it from the database but does not delete data in S3.`;
+            let userChoice = await new Promise((resolve) => {
+                this.editor.infoBox.show("Confirm", message, ["yes", "no"], (choice) => resolve(choice));
+            });
+            if (userChoice !== "yes") return true;
+
+            try {
+                const resp = await fetch(`/api/projects/${encodeURIComponent(projectName)}`, { method: "DELETE" });
+                if (!resp.ok) {
+                    const msg = await resp.text();
+                    throw new Error(`HTTP ${resp.status}: ${msg}`);
+                }
+                // Clear UI state
+                header.clearProjectSelection?.();
+                if (this.editor.data.world) {
+                    this.editor.clear();
+                }
+                // Refresh project list in header
+                const list = await this.editor.data.readProjectList();
+                header.updateProjectSelectors(list);
+                alert(`Project ${projectName} deleted.`);
+            } catch (err) {
+                console.error("Delete project failed:", err);
+                alert(`Delete failed: ${err.message}`);
+            }
+            return true;
+        },
+
+        // Create Project: open dialog and handle submission
+        "#cfg-create-project": (event) => {
+            this.openCreateProjectDialog();
+            return true;
+        },
+
     };
 
     changeableItems = {
@@ -325,6 +369,114 @@ class ConfigUi {
         this.wrapper.style.display = "none";
     }
 
+    openCreateProjectDialog() {
+        // Clone template
+        const tpl = document.getElementById('create-project-dialog-template');
+        if (!tpl) {
+            alert('Create Project UI not found.');
+            return;
+        }
+        const node = tpl.content.cloneNode(true);
+        document.body.appendChild(node);
+
+        const dialog = document.getElementById('create-project-dialog');
+        // debug
+        dialog.style.display = 'inherit';
+        if (!dialog) return;
+
+        const form = dialog.querySelector('#project-form');
+        const btnCancel = dialog.querySelector('#cancel-btn');
+        const btnExit = dialog.querySelector('#btn-exit');
+        const btnTest = dialog.querySelector('#test-connection');
+        const usePresigned = dialog.querySelector('#use-presigned-urls');
+        const expirationGroup = dialog.querySelector('#expiration-group');
+
+        const close = () => {
+            dialog.remove();
+        };
+
+        btnCancel.onclick = close;
+        btnExit.onclick = close;
+
+        // Toggle expiration minutes visibility
+        const syncExpirationVisibility = () => {
+            expirationGroup.style.display = usePresigned.checked ? '' : 'none';
+        };
+        usePresigned.onchange = syncExpirationVisibility;
+        syncExpirationVisibility();
+
+        // Test Connection (optional): backend currently validates during creation
+        btnTest.onclick = () => {
+            alert('Connection will be validated during creation.');
+        };
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+
+            const payload = {
+                project_name: dialog.querySelector('#project-name').value.trim(),
+                description: dialog.querySelector('#description').value.trim() || null,
+                storage_title: dialog.querySelector('#storage-title').value.trim() || null,
+                bucket_name: dialog.querySelector('#bucket-name').value.trim(),
+                bucket_prefix: dialog.querySelector('#bucket-prefix').value.trim() || null,
+                s3_endpoint: dialog.querySelector('#s3-endpoint').value.trim() || null,
+                access_key_id: dialog.querySelector('#access-key').value.trim(),
+                secret_access_key: dialog.querySelector('#secret-key').value,
+                use_presigned_urls: usePresigned.checked,
+                expiration_minutes: parseInt(dialog.querySelector('#expiration-minutes').value || '60', 10),
+                region_name: 'us-east-1',
+            };
+
+            if (!payload.project_name || !payload.bucket_name || !payload.access_key_id || !payload.secret_access_key) {
+                alert('Please fill in required fields.');
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/projects/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!resp.ok) {
+                    let msg;
+                    try {
+                        const err = await resp.json();
+                        msg = err.detail || JSON.stringify(err);
+                    } catch {
+                        msg = await resp.text();
+                    }
+                    throw new Error(msg || `HTTP ${resp.status}`);
+                }
+
+                const created = await resp.json();
+                // Refresh projects and select new one
+                const list = await this.editor.data.readProjectList();
+                this.editor.header.updateProjectSelectors(list);
+
+                // Try to auto-load first frame of the new project
+                try {
+                    const meta = await this.editor.data.readSceneMetaData(payload.project_name);
+                    const first = meta.frames && meta.frames[0];
+                    if (first) {
+                        this.editor.load_world(payload.project_name, first);
+                    }
+                } catch (e) {
+                    console.warn('Project created but failed to load metadata:', e);
+                }
+
+                alert('Project created successfully.');
+                close();
+            } catch (err) {
+                console.error('Create project failed:', err);
+                alert(`Create failed: ${err.message}`);
+            }
+        };
+
+        // Focus first input
+        dialog.querySelector('#project-name')?.focus();
+    }
 }
 
 
