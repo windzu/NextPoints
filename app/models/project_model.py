@@ -14,6 +14,10 @@ class ProjectStatus(str, Enum):
     completed = "completed"
     reviewed = "reviewed"
 
+class DataSourceType(str, Enum):
+    NEXTPOINTS = "nextpoints"
+    CUSTOM = "custom"
+
 
 class Project(SQLModel, table=True):
     """
@@ -30,14 +34,13 @@ class Project(SQLModel, table=True):
 
     # S3 存储配置
     storage_type: str = Field(default="AWS S3")
-    storage_title: Optional[str] = None
     bucket_name: str
     bucket_prefix: Optional[str] = None
     region_name: str = Field(default="us-east-1")
     s3_endpoint: Optional[str] = None
     access_key_id: str
     secret_access_key: str
-    use_presigned_urls: bool = Field(default=False)
+    use_presigned_urls: bool = Field(default=True)
     expiration_minutes: int = Field(default=60)
 
 
@@ -46,17 +49,20 @@ class Project(SQLModel, table=True):
 class ProjectCreateRequest(BaseModel):
     """创建项目请求模型"""
     project_name: str
+    data_source_type: DataSourceType = DataSourceType.NEXTPOINTS
+
     description: Optional[str] = None
     storage_type: str = "AWS S3"
-    storage_title: Optional[str] = None
     bucket_name: str
-    bucket_prefix: Optional[str] = None
     region_name: str = "us-east-1"
     s3_endpoint: Optional[str] = None
     access_key_id: str
     secret_access_key: str
-    use_presigned_urls: bool = False
+    use_presigned_urls: bool = True
     expiration_minutes: int = 60
+
+    main_channel: str = "lidar-fusion"
+    time_interval: float = 0.5  # 时间间隔，单位为秒
 
 
 class ProjectResponse(BaseModel):

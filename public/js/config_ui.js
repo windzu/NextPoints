@@ -416,9 +416,7 @@ class ConfigUi {
             const payload = {
                 project_name: dialog.querySelector('#project-name').value.trim(),
                 description: dialog.querySelector('#description').value.trim() || null,
-                storage_title: dialog.querySelector('#storage-title').value.trim() || null,
                 bucket_name: dialog.querySelector('#bucket-name').value.trim(),
-                bucket_prefix: dialog.querySelector('#bucket-prefix').value.trim() || null,
                 s3_endpoint: dialog.querySelector('#s3-endpoint').value.trim() || null,
                 access_key_id: dialog.querySelector('#access-key').value.trim(),
                 secret_access_key: dialog.querySelector('#secret-key').value,

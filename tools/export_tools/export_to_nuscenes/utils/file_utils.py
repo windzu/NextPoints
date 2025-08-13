@@ -5,36 +5,36 @@ import os
 import json
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 
-def create_nuscenes_directory_structure(output_dir: Path) -> Dict[str, Path]:
-    """
-    Create standard NuScenes directory structure
+def create_nuscenes_directory_structure(output_dir: Path, sensor_channels: Optional[List[str]] = None) -> Dict[str, Path]:
+    """Create directory structure (v1.0-all). Optional dynamic sensor channel subdirs.
     
     Args:
-        output_dir: Output directory path
+        output_dir: base output path
+        sensor_channels: list of channel names to create under samples/
         
     Returns:
-        Dictionary mapping directory names to paths
+        mapping of logical names to paths
     """
-    # Create main directories
-    directories = {
+    directories: Dict[str, Path] = {
         'samples': output_dir / 'samples',
         'sweeps': output_dir / 'sweeps',
         'maps': output_dir / 'maps',
-        'v1.0-trainval': output_dir / 'v1.0-trainval'
+        'v1.0-all': output_dir / 'v1.0-all'
     }
     
-    # Create sensor subdirectories in samples
-    sensor_dirs = ['LIDAR_TOP', 'CAM_FRONT', 'CAM_BACK', 'CAM_FRONT_LEFT', 'CAM_FRONT_RIGHT', 'CAM_BACK_LEFT', 'CAM_BACK_RIGHT']
-    
-    for sensor in sensor_dirs:
-        directories[f'samples_{sensor}'] = directories['samples'] / sensor
-    
-    # Create all directories
+    # Create main directories
     for dir_path in directories.values():
         dir_path.mkdir(parents=True, exist_ok=True)
+    
+    # Create sensor subdirectories in samples if provided
+    if sensor_channels:
+        for ch in sensor_channels:
+            ch_dir = directories['samples'] / ch
+            ch_dir.mkdir(parents=True, exist_ok=True)
+            directories[f'samples_{ch}'] = ch_dir
     
     return directories
 
@@ -116,7 +116,7 @@ def generate_nuscenes_filename(
 
 def validate_nuscenes_structure(output_dir: Path) -> List[str]:
     """
-    Validate generated NuScenes directory structure
+    Validate generated NuScenes directory structure (v1.0-all variant).
     
     Args:
         output_dir: Output directory to validate
@@ -124,28 +124,26 @@ def validate_nuscenes_structure(output_dir: Path) -> List[str]:
     Returns:
         List of validation errors (empty if valid)
     """
-    errors = []
+    errors: List[str] = []
     
     # Required directories
-    required_dirs = ['samples', 'v1.0-trainval']
+    required_dirs = ['samples', 'v1.0-all']
     for dir_name in required_dirs:
-        dir_path = output_dir / dir_name
-        if not dir_path.exists():
+        if not (output_dir / dir_name).exists():
             errors.append(f"Missing required directory: {dir_name}")
     
     # Required JSON files
     required_files = [
         'scene.json', 'sample.json', 'sample_data.json', 'sample_annotation.json',
         'instance.json', 'ego_pose.json', 'calibrated_sensor.json', 'sensor.json',
-        'category.json', 'attribute.json', 'visibility.json', 'log.json'
+        'category.json', 'attribute.json', 'visibility.json', 'log.json', 'map.json'
     ]
     
-    v1_dir = output_dir / 'v1.0-trainval'
+    v1_dir = output_dir / 'v1.0-all'
     if v1_dir.exists():
         for filename in required_files:
-            file_path = v1_dir / filename
-            if not file_path.exists():
-                errors.append(f"Missing required file: v1.0-trainval/{filename}")
+            if not (v1_dir / filename).exists():
+                errors.append(f"Missing required file: v1.0-all/{filename}")
     
     return errors
 

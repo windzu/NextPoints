@@ -15,7 +15,6 @@ from .token_generator import (
 )
 
 from .coordinate_transform import (
-    euler_to_quaternion,
     transform_position_to_global,
     transform_rotation_to_global,
     transform_psr_to_global,
@@ -46,7 +45,6 @@ __all__ = [
     'generate_sensor_token',
     
     # Coordinate transformation
-    'euler_to_quaternion',
     'transform_position_to_global',
     'transform_rotation_to_global',
     'transform_psr_to_global',

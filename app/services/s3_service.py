@@ -5,10 +5,30 @@ import os
 import re
 import logging
 import json
+import mimetypes
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
+CONTENT_TYPE_MAP = {
+    # 常见图片
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    # 常见文本
+    ".txt": "text/plain",
+    ".json": "text/json",
+    ".csv": "text/csv",
+    ".xml": "application/xml",
+    # PDF
+    ".pdf": "application/pdf",
+    # 视频
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+}
 
 class S3Service:
     """S3 存储服务类"""
@@ -91,35 +111,26 @@ class S3Service:
             # 端点连不通（MinIO/S3 网络问题）
             raise
 
-    def list_objects(self, bucket_name: str, prefix: str = "") -> List[Dict]:
+    def list_objects(self, bucket_name: str, prefix: str = "") -> List[str]:
         """
-        列出存储桶中的对象
-        
-        Args:
-            bucket_name: 存储桶名称
-            prefix: 对象键前缀
-            
-        Returns:
-            对象列表，每个对象包含 key, size, last_modified 等信息
+        列出指定前缀 (文件夹) 下的所有对象键。
+
+        :param bucket_name: Bucket 名称
+        :param prefix: 对象键前缀 (模拟的文件夹路径)
+        :return: 对象键的列表 (List[str])
         """
+        object_keys = []
         try:
-            objects = []
-            paginator = self.s3_client.get_paginator('list_objects_v2')
-            
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-                if 'Contents' in page:
-                    for obj in page['Contents']:
-                        objects.append({
-                            'key': obj['Key'],
-                            'size': obj['Size'],
-                            'last_modified': obj['LastModified'],
-                            'etag': obj['ETag']
-                        })
-            
-            return objects
-        except Exception as e:
-            logger.error(f"Failed to list objects: {e}")
-            raise
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+            pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+            for page in pages:
+                if "Contents" in page:
+                    for obj in page["Contents"]:
+                        object_keys.append(obj["Key"])
+            logging.info(f"在 '{prefix}' 下找到 {len(object_keys)} 个对象。")
+        except ClientError as e:
+            logging.error(f"列出对象失败: {e}")
+        return object_keys
 
     def list_all_objects(self, bucket_name: str, prefix: str) -> List[Dict]:
         """
@@ -300,6 +311,68 @@ class S3Service:
             logger.error(f"Failed to sync project data: {e}")
             raise
     
+    def copy_object(self, source_bucket, source_key, dest_bucket, dest_key):
+        """
+        根据后缀自动匹配 ContentType 并复制对象
+        """
+        try:
+            # 获取扩展名并转换小写
+            _, ext = os.path.splitext(dest_key)
+            ext = ext.lower()
+
+            # 优先用自定义映射
+            content_type = CONTENT_TYPE_MAP.get(ext)
+            if not content_type:
+                # 没匹配到则用 mimetypes 猜
+                guessed, _ = mimetypes.guess_type(dest_key)
+                content_type = guessed or "application/octet-stream"
+
+            copy_source = {"Bucket": source_bucket, "Key": source_key}
+
+            self.s3_client.copy_object(
+                CopySource=copy_source,
+                Bucket=dest_bucket,
+                Key=dest_key,
+                ContentType=content_type,
+                ContentDisposition="inline",   # 让浏览器内联预览
+                MetadataDirective="REPLACE"    # 替换元数据
+            )
+            return True
+        except ClientError as e:
+            logging.error(f"复制对象失败: {e}")
+            return False
+
+    def get_object(self, bucket_name, object_key):
+        """
+        从 MinIO 下载单个文件。
+
+        :param bucket_name: Bucket 名称
+        :param object_key: 要下载的对象的键 (路径)
+        :return: 对象的字节内容，如果失败则返回 None
+        """
+        try:
+            response = self.s3_client.get_object(Bucket=bucket_name, Key=object_key)
+            return response["Body"].read()
+        except ClientError as e:
+            logging.error(f"下载文件失败: {e}")
+            return None
+
+    def put_object(self, bucket_name, object_key, data):
+        """
+        将数据上传为 MinIO 中的对象。
+
+        :param bucket_name: Bucket 名称
+        :param object_key: 对象的键 (路径)
+        :param data: 要上传的数据 (字节内容)
+        :return: True 如果成功, False 如果失败
+        """
+        try:
+            self.s3_client.put_object(Bucket=bucket_name, Key=object_key, Body=data)
+            return True
+        except ClientError as e:
+            logging.error(f"上传对象失败: {e}")
+            return False
+
     def _extract_camera_id(self, file_path: str) -> str:
         """
         从文件路径中提取相机ID
@@ -327,3 +400,5 @@ class S3Service:
                 return match.group(1) if match.groups() else match.group(0)
         
         return "default"
+    
+

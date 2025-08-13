@@ -13,6 +13,8 @@ import logging
 import redis
 from celery import current_task
 from celery.exceptions import Retry
+from sqlmodel import SQLModel, create_engine, Session,select
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 # 注意：这里需要导入你实际的 celery_app
 from app.celery_app import celery_app
@@ -23,7 +25,9 @@ from app.services.project_service import get_project_metadata
 from app.services.s3_service import S3Service
 from app.models.export_model import NuScenesExportRequest
 from app.models.meta_data_model import ProjectMetadataResponse
+from app.models.project_model import Project
 
+from tools.export_tools.export_to_nuscenes import NextPointsToNuScenesConverter
 
 redis_client = redis.Redis.from_url(celery_app.conf.broker_url)
 
@@ -31,7 +35,7 @@ redis_client = redis.Redis.from_url(celery_app.conf.broker_url)
 def export_to_nuscenes_task(
     self,
     project_name: str,
-    export_request: dict,
+    export_request: dict
 ) -> Dict[str, Any]:
     """
     导出项目到 NuScenes 格式的异步任务
@@ -44,73 +48,73 @@ def export_to_nuscenes_task(
         任务结果字典
     """
     try:
-        # 更新任务状态为处理中
-        self.update_state(
-            state=ExportStatus.PROCESSING,
-            meta={
-                "progress": 0,
-                "current_step": "Initializing export task",
-                "message": "Starting NuScenes export process"
-            }
-        )
-        # 1. 验证项目是否存在
-        export_request = NuScenesExportRequest(**export_request)
-        with get_session() as session:
+        with next(get_session()) as session:
+            # 更新任务状态为处理中
+            self.update_state(
+                state=ExportStatus.PROCESSING,
+                meta={
+                    "progress": 0,
+                    "current_step": "Initializing export task",
+                    "message": "Starting NuScenes export process"
+                }
+            )
+            # 1. 验证项目是否存在
+            export_request = NuScenesExportRequest(**export_request)
+
+            project: Optional[Project] = session.exec(
+                select(Project).where(Project.name == project_name)
+            ).first()
+            if not project:
+                raise HTTPException(status_code=404, detail=f"Project not found: {project_name}")
+
+
+            
+            # 2. 获取项目元数据
+            self.update_state(
+                state=ExportStatus.PROCESSING,
+                meta={"message": f"Loading metadata for project: {project_name}"}
+            )
             project_metadata = get_project_metadata(project_name, session)
             if not project_metadata:
                 raise ValueError(f"Project {project_name} not found")
+            
+            
+            # 3. 创建输出目录
+            output_dir = Path(f"/tmp/exports/{project_name}")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 4. 执行转换
+            result = _perform_nuscenes_conversion(
+                project_metadata=project_metadata,
+                export_request=export_request,
+                output_dir=output_dir
+            )
+
+            # debug
+            # echo output_dir
+            print(f"Output directory: {output_dir}")
         
-        # 2. 获取项目元数据
-        self.update_state(
-            state=ExportStatus.PROCESSING,
-            meta={
-                "progress": 10,
-                "current_step": "Loading project metadata",
-                "message": f"Loading metadata for project: {project_name}"
+            # # 5. 压缩输出文件
+            # self.update_state(
+            #     state=ExportStatus.PROCESSING,
+            #     meta={
+            #         "progress": 90,
+            #         "current_step": "Compressing output files",
+            #         "message": "Creating archive file"
+            #     }
+            # )
+            # 
+            # archive_path = _create_archive(output_dir, project_name)
+            
+            # 6. 清理临时文件
+            # shutil.rmtree(output_dir)
+        
+            # 7. 返回成功结果
+            return {
+                "status": ExportStatus.COMPLETED,
+                "message": "Export completed successfully",
+                "completed_at": datetime.utcnow().isoformat()
             }
-        )
-        
-        with get_session() as session:
-            project_metadata = get_project_metadata(project_name, session)
-            if not project_metadata:
-                raise ValueError(f"Project {project_name} not found")
-        
-        # 3. 创建输出目录
-        output_dir = Path(f"/tmp/exports/{project_name}")
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 4. 执行转换
-        result = _perform_nuscenes_conversion(
-            project_metadata=project_metadata,
-            export_request=export_request,
-            output_dir=output_dir
-        )
-        
-        # 5. 压缩输出文件
-        self.update_state(
-            state=ExportStatus.PROCESSING,
-            meta={
-                "progress": 90,
-                "current_step": "Compressing output files",
-                "message": "Creating archive file"
-            }
-        )
-        
-        archive_path = _create_archive(output_dir, project_name)
-        
-        # 6. 清理临时文件
-        shutil.rmtree(output_dir)
-        
-        # 7. 返回成功结果
-        return {
-            "status": ExportStatus.COMPLETED,
-            "message": "Export completed successfully",
-            "file_path": str(archive_path),
-            "file_size": os.path.getsize(archive_path),
-            "total_frames_processed": result.get("frames_count", 0),
-            "total_annotations_exported": result.get("annotations_count", 0),
-            "completed_at": datetime.utcnow().isoformat()
-        }
         
     except Exception as exc:
         # 更新任务状态为失败
@@ -142,7 +146,7 @@ def _perform_nuscenes_conversion(
     执行实际的 NuScenes 格式转换
     """
     # Import the new converter
-    from tools.export_tools.export_to_nuscenes import NextPointsToNuScenesConverter
+    
     
     try:
         # Create converter instance

@@ -1,8 +1,15 @@
 from typing import Optional, List, Dict
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from app.models.base_model import Pose
+
+class SensorType(str, Enum):
+    LIDAR = "lidar"
+    CAMERA = "camera"
+    RADAR = "radar"
+    IMU = "imu"
+    GPS = "gps"
 
 class CameraModel(str, Enum):
     PINHOLE = "pinhole"
@@ -46,9 +53,20 @@ class CameraConfig(BaseModel):
 class CalibrationMetadata(BaseModel):
     """标定信息响应模型"""
     channel: str
+    sensor_type: SensorType
     pose : Pose
     camera_config: Optional[CameraConfig] = None  # 包含相机内参、畸变系数等
     ignore_areas: List[IgnoreArea] = []  # 可选，忽略区域列表
 
+
+    @model_validator(mode="after")
+    def check_camera_config_requirement(self):
+        if self.sensor_type == SensorType.CAMERA:
+            if self.camera_config is None:
+                raise ValueError("When sensor_type is CAMERA, camera_config must be provided")
+        else:
+            if self.camera_config is not None:
+                raise ValueError(f"When sensor_type is {self.sensor_type}, camera_config must be None")
+        return self
 
 

@@ -30,29 +30,22 @@ class NuScenesScene:
 
 @dataclass
 class NuScenesSample:
-    """NuScenes sample data model"""
+    """NuScenes sample data model (official fields only)."""
     token: str
     timestamp: int
     prev: str
     next: str
     scene_token: str
-    data: Optional[Dict[str, str]] = None  # sensor_channel -> sample_data_token
+    data: Optional[Dict[str, str]] = None  # kept internally, excluded in output
     
     def to_dict(self) -> Dict[str, Any]:
-        result = {
+        return {
             "token": self.token,
             "timestamp": self.timestamp,
             "prev": self.prev,
             "next": self.next,
             "scene_token": self.scene_token
         }
-        
-        if self.data:
-            result["data"] = self.data
-        else:
-            result["data"] = {}
-            
-        return result
 
 
 @dataclass

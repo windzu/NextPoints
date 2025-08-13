@@ -7,16 +7,18 @@ import logging
 from typing import Dict, Any, Optional, List,Set,Tuple
 from botocore.exceptions import ClientError
 from sqlmodel import select
+import os
 
 
 from app.services.s3_service import S3Service
-from app.models.project_model import Project,ProjectResponse,ProjectCreateRequest,ProjectStatus
+from app.models.project_model import Project,ProjectResponse,ProjectCreateRequest,ProjectStatus,DataSourceType
 from app.models.meta_data_model import FrameMetadata,CalibrationMetadata,ProjectMetadataResponse,Pose
 from app.models.annotation_model import AnnotationItem,FrameAnnotation
 
 from app.database import get_session
 
 from tools.check_label import LabelChecker
+from tools.custom2nextpoints import custom2nextpoints
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +57,37 @@ def create_project(
             )
 
 
+        # judge if data_source_type is custom or nextpoints
+        # 判断数据源类型是 custom 还是 nextpoints
+        bucket_prefix=os.path.join(request.project_name,"nextpoints")
+        if request.data_source_type == DataSourceType.CUSTOM:
+            print("Using custom2nextpoints to generate nextpoints...")
+            ret = custom2nextpoints(
+                scene_name=request.project_name,
+                bucket=request.bucket_name,
+                s3_service=s3_service,
+                main_channel=request.main_channel,
+                time_interval_s=request.time_interval
+            )
+            if not ret:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to convert custom data to nextpoints format."
+                )
+        elif request.data_source_type == DataSourceType.NEXTPOINTS:
+            print("Direct using nextpoints...")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported data source type: {request.data_source_type}"
+            )
         # 2. 创建项目记录
-        # (Create the Project record)
         project = Project(
             name=request.project_name,
             description=request.description,
             storage_type=request.storage_type,
-            storage_title=request.storage_title,
             bucket_name=request.bucket_name,
-            bucket_prefix=request.bucket_prefix,
+            bucket_prefix=bucket_prefix,
             region_name=request.region_name,
             s3_endpoint=request.s3_endpoint,
             access_key_id=request.access_key_id,
@@ -74,11 +98,12 @@ def create_project(
         )
         
         session.add(project)
-        session.commit()
-        session.refresh(project)
+        session.flush()  # 确保项目 ID 已生成
 
         # 3. use get_project_metadata to check project metadata
         get_project_metadata(project.name, session)
+        session.commit()
+        session.refresh(project)
 
         # 4. return project response
         return ProjectResponse(
@@ -90,8 +115,6 @@ def create_project(
         )
     
     except Exception as e:
-        # 捕获其他所有异常（如数据库错误、S3读取错误）
-        # (Catch all other exceptions, e.g., DB errors, S3 read errors)
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -103,7 +126,7 @@ def get_project_metadata(
     session: Session = Depends(get_session)
 ) -> ProjectMetadataResponse:
     """
-    获取项目完整元数据。优先读取meta.json，若不存在则生成。
+    获取项目完整元数据,用于对数据进行校验
     """
     # 1. 获取项目基本信息和状态
     project = session.exec(
@@ -122,10 +145,8 @@ def get_project_metadata(
         region_name=project.region_name
     )
 
-    # 3. 每次获取元数据时都生成 meta.json
-    # 这是为了确保数据是最新的，避免缓存问题
+    # 3. generate project metadata
     try:
-        # meta_content = _generate_and_upload_meta_json(project, s3_service)
         project_meta_data = _generate_project_meta_data(project, s3_service)
         return project_meta_data
     except Exception as e:
@@ -164,7 +185,7 @@ def get_check_label(
             raise HTTPException(status_code=404, detail="No label files found for this project")
         annotations = []
         for label_file in label_files:
-            key = label_file['key']
+            key = label_file
             relative_key = key[len(label_key_prefix):].lstrip('/') if label_key_prefix else key
             frame_id = Path(relative_key).stem  # 获取帧ID
             
@@ -339,6 +360,25 @@ def _generate_project_meta_data(
             expiration=project.expiration_minutes * 60,
         )
 
+    def _check_camera_channel_and_camera_calibration(
+        camera_channels: Dict[str, Set[str]],
+        calibration: Dict[str, CalibrationMetadata]
+    ) -> None:
+        """
+        校验 camera_channels 和 calibration 的一致性
+        - camera_channels 中的通道必须在 calibration 中存在,且必须有 camera_config
+        - calibration 中的 camera calibration 如果不在 camera_channels 中，则忽略
+        """
+        for channel in list(camera_channels.keys()):
+            if channel not in calibration:
+                raise ValueError(f"Camera channel '{channel}' not found in calibration metadata.")
+            if calibration[channel].camera_config is None:
+                raise ValueError(f"Camera channel '{channel}' in calibration metadata must have a camera_config.")
+
+        for channel in list(calibration.keys()):
+            if calibration[channel].camera_config is not None and channel not in camera_channels:
+                logger.warning(f"Calibration channel '{channel}' has camera_config but not found in camera channels, removing.")
+                del calibration[channel]
 
     bucket = project.bucket_name
     root = _safe_join(project.bucket_prefix or "")
@@ -357,9 +397,9 @@ def _generate_project_meta_data(
         raw = s3_service.read_json_object(bucket, key)
         meta = CalibrationMetadata.model_validate(raw)  # 不一致直接抛错
         chan = meta.channel or _stem(key)  # 以 JSON 内 channel 为准，缺失则用文件名
-        # 如需防止重复 channel 直接报错，可启用以下检查
-        # if chan in calibration:
-        #     raise ValueError(f"重复的 calibration channel: {chan}")
+        # 防止重复
+        if chan in calibration:
+            raise ValueError(f"重复的 calibration channel: {chan}")
         calibration[chan] = meta
 
     # 2) 枚举 lidar/camera 子通道及各自的时间戳索引
@@ -395,7 +435,10 @@ def _generate_project_meta_data(
         ts = _stem(fname)
         camera_channels.setdefault(channel, set()).add(ts)
         camera_index[(channel, ts)] = key
-
+    
+    # check camera_channels and calibration 
+    _check_camera_channel_and_camera_calibration(camera_channels, calibration)
+        
     # ego_pose：ts -> key
     ego_pose_index: Dict[str, str] = {}
     for obj in s3_service.list_all_objects(bucket, ego_pose_prefix):
@@ -414,9 +457,9 @@ def _generate_project_meta_data(
     def pick_main_channel() -> str:
         if main_channel in lidar_channels:
             return main_channel
-        if len(lidar_channels) == 1:
-            return next(iter(lidar_channels.keys()))
-        return sorted(lidar_channels.keys())[0]
+        else:
+            raise ValueError(f"指定的主通道 {main_channel} 在 lidar/ 目录下未找到。")
+
 
     main_channel = pick_main_channel()
     baseline_ts = sorted(lidar_channels[main_channel], key=lambda x: _ns_to_int(x))
@@ -437,12 +480,16 @@ def _generate_project_meta_data(
             # 按理不会发生（baseline 来源于 main_channel），严防一致性问题
             raise ValueError(f"时间戳 {ts} 缺少主通道 {main_channel} 的点云。")
 
-        # images: 收集同时间戳的所有相机图片（可空）
+        # images: 收集同时间戳的所有相机图片（不可空）
         images: Dict[str, str] = {}
         for ch in camera_channels.keys():
             key = camera_index.get((ch, ts))
             if key:
                 images[ch] = _as_url(s3_service, project, key)
+            else:
+                raise ValueError(f"时间戳 {ts} 缺少相机通道 {ch} 的图片。")
+        if not images:
+            raise ValueError(f"时间戳 {ts} 缺少任何相机图片。")
 
         # ego pose：可空；若存在严格校验为 Pose
         pose: Optional[Pose] = None
@@ -458,17 +505,18 @@ def _generate_project_meta_data(
         annotation: Optional[List[AnnotationItem]] = None
         label_key = _safe_join(root, "label", f"{ts}.json")
         try:
-            label_data = s3_service.read_json_object(bucket, label_key)
-            if isinstance(label_data, list):
-                annotation = [AnnotationItem.model_validate(item) for item in label_data]
-            else:
-                raise ValueError(f"标注数据 {label_key} 格式错误，应为列表。")
+            if s3_service.object_exists(bucket, label_key):
+                label_data = s3_service.read_json_object(bucket, label_key)
+                if isinstance(label_data, list):
+                    annotation = [AnnotationItem.model_validate(item) for item in label_data]
+                else:
+                    raise ValueError(f"标注数据 {label_key} 格式错误，应为列表。")
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey':
-                # 如果没有找到标注文件，则 annotation 为空
+                # 如果没有标注文件，则 annotation 为空
                 annotation = None
             else:
-                raise ValueError(f"读取标注文件 {label_key} 失败: {e}")
+                raise ValueError(f"读取标注文件 {label_key} 时发生错误：{e}")
 
         frames.append(
             FrameMetadata(

@@ -269,14 +269,10 @@ def test_coordinate_transform():
     print("Testing coordinate transformations...")
     
     from tools.export_tools.export_to_nuscenes.utils import (
-        euler_to_quaternion, transform_position_to_global, transform_psr_to_global
+         transform_position_to_global, transform_psr_to_global
     )
     from app.models.annotation_model import PSR, Position, Rotation, Scale
-    
-    # Test euler to quaternion
-    rotation = Rotation(x=0.0, y=0.0, z=1.57)  # 90 degrees in Z
-    quat = euler_to_quaternion(rotation)
-    print(f"Euler {rotation} -> Quaternion {quat}")
+
     
     # Test position transform
     local_pos = Position(x=1.0, y=2.0, z=0.5)
@@ -290,7 +286,7 @@ def test_coordinate_transform():
     # Test full PSR transform
     psr = PSR(
         position=Position(x=1.0, y=2.0, z=0.5),
-        rotation=Rotation(x=0.0, y=0.0, z=0.1),
+        rotation=Rotation(x=0.0, y=0.0, z=0.1, w=0.99),
         scale=Scale(x=4.5, y=2.0, z=1.8)
     )
     

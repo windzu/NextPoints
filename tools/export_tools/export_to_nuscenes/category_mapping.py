@@ -85,9 +85,6 @@ CATEGORY_MAPPING = {
 
     # Static objects
     "bicycle_rack": "static_object.bicycle_rack",
-
-    # Default for unknown categories
-    "unknown": "movable_object.pushable_pullable"
 }
 
 # Attribute mapping based on object type and context
@@ -154,7 +151,13 @@ def get_nuscenes_category(nextpoints_type: str) -> str:
     Returns:
         NuScenes category name
     """
-    return CATEGORY_MAPPING.get(nextpoints_type, CATEGORY_MAPPING["Unknown"])
+    # Strict mapping: raise if unknown.
+    if nextpoints_type not in CATEGORY_MAPPING:
+        raise ValueError(f"Category mapping missing for object type: {nextpoints_type}")
+    mapped = CATEGORY_MAPPING[nextpoints_type]
+    if mapped not in NUSCENES_CATEGORIES:
+        raise ValueError(f"Mapped category '{mapped}' not in NuScenes standard list for object type: {nextpoints_type}")
+    return mapped
 
 
 def get_default_attributes(category: str) -> list:

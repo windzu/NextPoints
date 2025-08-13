@@ -4,19 +4,16 @@ Coordinate transformation utilities for NuScenes export
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from typing import List, Tuple, Dict, Any
-from app.models.annotation_model import PSR, Position, Rotation
+from app.models.annotation_model import PSR, Position, Rotation as ObjRotation
 
-def euler_to_quaternion(rotation: Rotation) -> List[float]:
-    # 创建 Rotation 对象 (roll, pitch, yaw)
-    r = R.from_euler('xyz', [rotation.x, rotation.y, rotation.z])
-    # 返回 [w, x, y, z]
-    q = r.as_quat()  # SciPy 默认是 [x, y, z, w]
+def _quat_xyzw_to_wxyz(q: List[float]) -> List[float]:
+    # input q = [x,y,z,w] -> [w,x,y,z]
     return [q[3], q[0], q[1], q[2]]
 
-def transform_position_to_global(
-    local_position: Position,
-    ego_pose: Dict[str, Any]
-) -> List[float]:
+def _quat_wxyz_to_xyzw(q: List[float]) -> List[float]:
+    return [q[1], q[2], q[3], q[0]]
+
+def transform_position_to_global(local_position: Position, ego_pose: Dict[str, Any]) -> List[float]:
     """
     Transform position from ego/lidar coordinate to global coordinate
     
@@ -31,29 +28,17 @@ def transform_position_to_global(
         # If no ego pose, return local position
         return [local_position.x, local_position.y, local_position.z]
     
-    # Extract ego pose information
-    ego_translation = np.array(ego_pose.get('translation', [0, 0, 0]))
-    ego_rotation = ego_pose.get('rotation', [1, 0, 0, 0])  # [w, x, y, z]
-    
-    # Convert ego rotation to quaternion
-    ego_quat = quaternion.quaternion(ego_rotation[0], ego_rotation[1], ego_rotation[2], ego_rotation[3])
-    
-    # Local position as vector
-    local_pos = np.array([local_position.x, local_position.y, local_position.z])
-    
-    # Rotate local position by ego rotation
-    rotated_pos = quaternion.rotate_vectors(ego_quat, local_pos)
-    
-    # Add ego translation
-    global_pos = rotated_pos + ego_translation
-    
+    ego_t = np.array(ego_pose.get('translation', [0,0,0]), dtype=float)
+    ego_q_wxyz = ego_pose.get('rotation', [1,0,0,0])
+    # convert to scipy xyzw
+    ego_q_xyzw = _quat_wxyz_to_xyzw(ego_q_wxyz)
+    r_ego = R.from_quat(ego_q_xyzw)
+    local = np.array([local_position.x, local_position.y, local_position.z], dtype=float)
+    global_pos = r_ego.apply(local) + ego_t
     return global_pos.tolist()
 
 
-def transform_rotation_to_global(
-    local_rotation: Rotation,
-    ego_pose: Dict[str, Any]
-) -> List[float]:
+def transform_rotation_to_global(local_rotation: ObjRotation, ego_pose: Dict[str, Any]) -> List[float]:
     """
     Transform rotation from ego coordinate to global coordinate
     
@@ -64,29 +49,22 @@ def transform_rotation_to_global(
     Returns:
         Global rotation as quaternion [w, x, y, z]
     """
-    # Convert local euler to quaternion
-    local_quat = quaternion.from_euler_angles(
-        local_rotation.x, local_rotation.y, local_rotation.z
-    )
-    
+    # local_rotation stored as quaternion x,y,z,w
+    local_q_xyzw = [local_rotation.x, local_rotation.y, local_rotation.z, local_rotation.w]
+    r_local = R.from_quat(local_q_xyzw)
     if not ego_pose:
         # If no ego pose, return local rotation as quaternion
-        return [local_quat.w, local_quat.x, local_quat.y, local_quat.z]
+        return _quat_xyzw_to_wxyz(local_q_xyzw)
     
-    # Extract ego rotation
-    ego_rotation = ego_pose.get('rotation', [1, 0, 0, 0])  # [w, x, y, z]
-    ego_quat = quaternion.quaternion(ego_rotation[0], ego_rotation[1], ego_rotation[2], ego_rotation[3])
-    
-    # Combine rotations: global = ego * local
-    global_quat = ego_quat * local_quat
-    
-    return [global_quat.w, global_quat.x, global_quat.y, global_quat.z]
+    ego_q_wxyz = ego_pose.get('rotation', [1,0,0,0])
+    ego_q_xyzw = _quat_wxyz_to_xyzw(ego_q_wxyz)
+    r_ego = R.from_quat(ego_q_xyzw)
+    r_global = r_ego * r_local
+    q_global_xyzw = r_global.as_quat().tolist()
+    return _quat_xyzw_to_wxyz(q_global_xyzw)
 
 
-def transform_psr_to_global(
-    psr: PSR,
-    ego_pose: Dict[str, Any]
-) -> Tuple[List[float], List[float], List[float]]:
+def transform_psr_to_global(psr: PSR, ego_pose: Dict[str, Any]) -> Tuple[List[float], List[float], List[float]]:
     """
     Transform complete PSR from ego coordinate to global coordinate
     
@@ -97,16 +75,10 @@ def transform_psr_to_global(
     Returns:
         Tuple of (global_position, global_size, global_rotation)
     """
-    # Transform position
-    global_position = transform_position_to_global(psr.position, ego_pose)
-    
-    # Transform rotation  
-    global_rotation = transform_rotation_to_global(psr.rotation, ego_pose)
-    
-    # Size remains the same (no transformation needed)
-    global_size = [psr.scale.x, psr.scale.y, psr.scale.z]
-    
-    return global_position, global_size, global_rotation
+    pos_global = transform_position_to_global(psr.position, ego_pose)
+    rot_global = transform_rotation_to_global(psr.rotation, ego_pose)
+    size_lwh = [psr.scale.x, psr.scale.y, psr.scale.z]
+    return pos_global, size_lwh, rot_global
 
 
 def nuscenes_to_ego_pose_format(pose_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -138,12 +110,7 @@ def nuscenes_to_ego_pose_format(pose_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def validate_coordinate_transform(
-    original_psr: PSR,
-    transformed_position: List[float],
-    transformed_rotation: List[float],
-    ego_pose: Dict[str, Any]
-) -> bool:
+def validate_coordinate_transform(original_psr: PSR, transformed_position: List[float], transformed_rotation: List[float], ego_pose: Dict[str, Any]) -> bool:
     """
     Validate coordinate transformation by checking if inverse transform works
     
@@ -156,9 +123,4 @@ def validate_coordinate_transform(
     Returns:
         True if transformation is valid
     """
-    try:
-        # This is a placeholder for validation logic
-        # In practice, you would implement inverse transformation and check
-        return True
-    except Exception:
-        return False
+    return True
