@@ -93,7 +93,8 @@ class AttributeModel(_TokenModel):
     name: str
     description: str
 
-class VisibilityModel(_TokenModel):
+class VisibilityModel(BaseModel):
+    token: str # 与其他token不一样，Visibility token 是 1，2，3，4
     level: str
     description: str
 

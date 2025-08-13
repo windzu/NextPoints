@@ -13,10 +13,7 @@ from app.models.export_model import NuScenesExportRequest
 from app.models.annotation_model import AnnotationItem
 
 from .schema import (
-    NuScenesScene, NuScenesSample, NuScenesSampleData, NuScenesEgoPose,
-    NuScenesSensor, NuScenesCalibratedSensor, NuScenesLog, NuScenesCategory,
-    NuScenesAttribute, NuScenesVisibility, NuScenesMap, NuScenesInstance,
-    NuScenesSampleAnnotation, InstanceTracker
+    InstanceTracker  # remaining tracker after migration
 )
 from .schema.pydantic_models import (
     SceneModel, SampleModel, SampleDataModel, EgoPoseModel, SensorModel,
@@ -50,17 +47,19 @@ class NextPointsToNuScenesConverter:
         self.scene_name = project_metadata.project.name
         
         # Data containers
-        self.scenes: List[NuScenesScene] = []
-        self.samples: List[NuScenesSample] = []
-        self.sample_data: List[NuScenesSampleData] = []
-        self.ego_poses: List[NuScenesEgoPose] = []
-        self.sensors: List[NuScenesSensor] = []
-        self.calibrated_sensors: List[NuScenesCalibratedSensor] = []
-        self.logs: List[NuScenesLog] = []
-        self.categories: List[NuScenesCategory] = []
-        self.attributes: List[NuScenesAttribute] = []
-        self.visibility: List[NuScenesVisibility] = []
-        self.maps: List[NuScenesMap] = []
+        self.scenes: List[SceneModel] = []
+        self.samples: List[SampleModel] = []
+        self.sample_data: List[SampleDataModel] = []
+        self.ego_poses: List[EgoPoseModel] = []
+        self.sensors: List[SensorModel] = []
+        self.calibrated_sensors: List[CalibratedSensorModel] = []
+        self.logs: List[LogModel] = []
+        self.categories: List[CategoryModel] = []
+        self.attributes: List[AttributeModel] = []
+        self.visibility: List[VisibilityModel] = []
+        self.maps: List[MapModel] = []
+        self.instances: List[InstanceModel] = []
+        self.sample_annotations: List[SampleAnnotationModel] = []
         
         # Annotation tracking
         self.instance_tracker = InstanceTracker()
@@ -82,39 +81,49 @@ class NextPointsToNuScenesConverter:
     def convert(self, output_dir: Path) -> Dict[str, Any]:
         """Main conversion method (will be further tightened with Pydantic)."""
         try:
-            # Collect dynamic sensor channels (lidar main + cameras)
-            sensor_channels = [self.project_metadata.main_channel]
-            for ch, calib in self.project_metadata.calibration.items():
-                if getattr(calib, 'camera_config', None):
-                    if ch not in sensor_channels:
-                        sensor_channels.append(ch)
+            # Initialize static data first (sets map content & sensors)
+            self._initialize_static_data()
+            # Collect dynamic sensor channels from initialized sensors
+            sensor_channels = [s.channel for s in self.sensors]
             directories = create_nuscenes_directory_structure(output_dir, sensor_channels=sensor_channels)
             # Write black map file
             map_file_path = directories['maps'] / self._black_map_filename
             if not map_file_path.exists():
                 with open(map_file_path, 'wb') as f:
                     f.write(self._black_map_content)
-            self._initialize_static_data()
+            # Process frames & annotations
             self._process_frames(directories)
             self._finalize_annotations()
-            # NOTE: changed split dir to v1.0-all
+
+            # Save tables
+            # debug
+            print("Saving JSON tables...")
             self._save_json_tables(directories['v1.0-all'])
-            validation_errors = validate_nuscenes_structure(output_dir)
+            # debug
+            print("Saving JSON tables completed.")
+
+            # Validate structure & files
+            validation_errors = validate_nuscenes_structure(output_dir, main_channel=self.project_metadata.main_channel)
             if validation_errors:
                 self.stats["errors"].extend(validation_errors)
             return self.stats
         except Exception as e:
             self.stats["errors"].append(f"Conversion failed: {str(e)}")
+            # debug : echo self.stats["errors"] 
+            for error in self.stats["errors"]:
+                print(f"Error: {error}")
             raise e
     
     def _initialize_static_data(self):
         """Initialize static NuScenes data (categories, attributes, etc.)"""
+        # Ensure frames sorted by timestamp
+        self.project_metadata.frames.sort(key=lambda f: int(f.timestamp_ns))
         # Categories
         for category_name in get_all_nuscenes_categories():
             token = generate_sensor_token(f"category_{category_name}")
             self.category_tokens[category_name] = token
             
-            category = NuScenesCategory(
+            category = CategoryModel(
                 token=token,
                 name=category_name,
                 description=f"NuScenes category: {category_name}"
@@ -126,7 +135,7 @@ class NextPointsToNuScenesConverter:
             token = generate_sensor_token(f"attribute_{attr_name}")
             self.attribute_tokens[attr_name] = token
             
-            attribute = NuScenesAttribute(
+            attribute = AttributeModel(
                 token=token,
                 name=attr_name,
                 description=f"NuScenes attribute: {attr_name}"
@@ -135,7 +144,7 @@ class NextPointsToNuScenesConverter:
         
         # Visibility levels
         for level, token in NUSCENES_VISIBILITY.items():
-            visibility = NuScenesVisibility(
+            visibility = VisibilityModel(
                 token=token,
                 level=level,
                 description=f"Visibility: {level}"
@@ -147,7 +156,7 @@ class NextPointsToNuScenesConverter:
         
         # Log
         log_token = generate_log_token(self.scene_name)
-        log = NuScenesLog(
+        log = LogModel(
             token=log_token,
             logfile=f"{self.scene_name}.log",
             vehicle="vehicle",
@@ -160,8 +169,7 @@ class NextPointsToNuScenesConverter:
         scene_token = generate_scene_token(self.scene_name)
         first_sample_token = generate_sample_token(self.scene_name, self.project_metadata.frames[0].timestamp_ns)
         last_sample_token = generate_sample_token(self.scene_name, self.project_metadata.frames[-1].timestamp_ns)
-        
-        scene = NuScenesScene(
+        scene = SceneModel(
             token=scene_token,
             name=self.scene_name,
             description=f"Exported from NextPoints project: {self.scene_name}",
@@ -179,7 +187,7 @@ class NextPointsToNuScenesConverter:
         )
         self._black_map_content = black_png_bytes
         self._black_map_filename = "default_map.png"
-        default_map = NuScenesMap(
+        default_map = MapModel(
             token=map_token,
             log_tokens=[log_token],
             category="semantic_prior",
@@ -196,7 +204,7 @@ class NextPointsToNuScenesConverter:
         lidar_sensor_token = generate_sensor_token(main_channel)
         self.sensor_tokens[main_channel] = lidar_sensor_token
 
-        lidar_sensor = NuScenesSensor(
+        lidar_sensor = SensorModel(
             token=lidar_sensor_token,
             channel=main_channel,
             modality="lidar"
@@ -207,7 +215,7 @@ class NextPointsToNuScenesConverter:
         lidar_calib_token = generate_calibrated_sensor_token(self.scene_name, main_channel)
         self.calibrated_sensor_tokens[main_channel] = lidar_calib_token
 
-        lidar_calib = NuScenesCalibratedSensor(
+        lidar_calib = CalibratedSensorModel(
             token=lidar_calib_token,
             sensor_token=lidar_sensor_token,
             translation=[0.0, 0.0, 0.0],
@@ -226,7 +234,7 @@ class NextPointsToNuScenesConverter:
         sensor_token = generate_sensor_token(camera_channel)
         self.sensor_tokens[camera_channel] = sensor_token
 
-        sensor = NuScenesSensor(
+        sensor = SensorModel(
             token=sensor_token,
             channel=camera_channel,
             modality="camera"
@@ -261,7 +269,7 @@ class NextPointsToNuScenesConverter:
             translation = [0.0, 0.0, 0.0]
             rotation = [1.0, 0.0, 0.0, 0.0]
             camera_intrinsic = [[1.0, 0.0, 0.0],[0.0,1.0,0.0],[0.0,0.0,1.0]]
-        calib_sensor = NuScenesCalibratedSensor(
+        calib_sensor = CalibratedSensorModel(
             token=calib_token,
             sensor_token=sensor_token,
             translation=translation,
@@ -337,7 +345,7 @@ class NextPointsToNuScenesConverter:
         else:
             ego_pose_data = {"translation": [0.0,0.0,0.0], "rotation": [1.0,0.0,0.0,0.0]}
         
-        ego_pose = NuScenesEgoPose(
+        ego_pose = EgoPoseModel(
             token=ego_pose_token,
             timestamp=timestamp_us,
             rotation=ego_pose_data["rotation"],
@@ -356,13 +364,12 @@ class NextPointsToNuScenesConverter:
             sample_data_dict.update(camera_tokens)
         
         # Create sample with data
-        sample = NuScenesSample(
+        sample = SampleModel(
             token=sample_token,
             timestamp=timestamp_us,
             prev=prev_token,
             next=next_token,
-            scene_token=scene_token,
-            data=sample_data_dict
+            scene_token=scene_token
         )
         self.samples.append(sample)
         
@@ -383,11 +390,13 @@ class NextPointsToNuScenesConverter:
             raise ValueError(f"Missing lidar data for main channel {main_channel} at frame {frame.timestamp_ns}")
         sample_data_token = generate_sample_data_token(self.scene_name, frame.timestamp_ns, main_channel)
         lidar_filename = generate_nuscenes_filename(self.scene_name, main_channel, frame.timestamp_ns, ".pcd")
-        lidar_target_path = directories['samples'] / main_channel
+        lidar_target_path = directories.get(f'samples_{main_channel}', (directories['samples'] / main_channel))
         lidar_target_path.mkdir(parents=True, exist_ok=True)
         lidar_source = frame.lidars[main_channel]
-        copy_sensor_data(lidar_source, lidar_target_path, lidar_filename)
-        sample_data = NuScenesSampleData(
+        success = copy_sensor_data(lidar_source, lidar_target_path, lidar_filename)
+        if not success:
+            raise ValueError(f"Failed to copy lidar file {lidar_source}")
+        sample_data = SampleDataModel(
             token=sample_data_token,
             sample_token=sample_token,
             ego_pose_token=ego_pose_token,
@@ -395,7 +404,9 @@ class NextPointsToNuScenesConverter:
             timestamp=timestamp_us,
             fileformat="pcd",
             is_key_frame=True,
-            filename=f"samples/{main_channel}/{lidar_filename}"
+            filename=f"samples/{main_channel}/{lidar_filename}",
+            prev="",
+            next=""
         )
         self.sample_data.append(sample_data)
         return sample_data_token
@@ -416,18 +427,19 @@ class NextPointsToNuScenesConverter:
                 raise ValueError(f"Calibration missing for camera channel {channel}")
             sample_data_token = generate_sample_data_token(self.scene_name, frame.timestamp_ns, channel)
             image_filename = generate_nuscenes_filename(self.scene_name, channel, frame.timestamp_ns, ".jpg")
-            cam_dir = (directories['samples'] / channel)
+            cam_dir = directories.get(f'samples_{channel}', (directories['samples'] / channel))
             cam_dir.mkdir(parents=True, exist_ok=True)
             if not image_url:
                 raise ValueError(f"Missing image URL for channel {channel} frame {frame.timestamp_ns}")
-            copy_sensor_data(image_url, cam_dir, image_filename)
-            # width/height from calibration
+            success = copy_sensor_data(image_url, cam_dir, image_filename)
+            if not success:
+                raise ValueError(f"Failed to copy image file {image_url}")
             calib = self.project_metadata.calibration.get(channel)
             height = width = None
             if calib and calib.camera_config:
                 height = calib.camera_config.height
                 width = calib.camera_config.width
-            sample_data = NuScenesSampleData(
+            sample_data = SampleDataModel(
                 token=sample_data_token,
                 sample_token=sample_token,
                 ego_pose_token=ego_pose_token,
@@ -437,7 +449,9 @@ class NextPointsToNuScenesConverter:
                 is_key_frame=True,
                 filename=f"samples/{channel}/{image_filename}",
                 height=height,
-                width=width
+                width=width,
+                prev="",
+                next=""
             )
             self.sample_data.append(sample_data)
             camera_tokens[channel] = sample_data_token
@@ -530,61 +544,74 @@ class NextPointsToNuScenesConverter:
         visibility_token = NUSCENES_VISIBILITY["v80-100"]
         
         # Create sample annotation
-        sample_annotation = NuScenesSampleAnnotation(
+        sample_annotation = SampleAnnotationModel(
             token=annotation_token,
             sample_token=sample_token,
-            instance_token="",  # Will be set by instance tracker
+            instance_token="",  # will be set after tracker returns instance token
             visibility_token=visibility_token,
             attribute_tokens=attribute_tokens,
             translation=global_position,
             size=global_size,
             rotation=global_rotation,
-            prev="",  # Will be set by instance tracker
-            next="",  # Will be set by instance tracker
+            prev="",
+            next="",
             num_lidar_pts=annotation.num_pts or 0,
             num_radar_pts=0
         )
-        
         # Add to instance tracker
-        track_id = annotation.obj_id  # Use obj_id as track_id
+        track_id = annotation.obj_id
         instance_token = self.instance_tracker.add_annotation(
             self.scene_name,
             track_id,
             category_token,
-            sample_annotation
+            sample_annotation,
+            timestamp_us
         )
-        
-        # Set instance token
         sample_annotation.instance_token = instance_token
-    
+
     def _finalize_annotations(self):
         """Finalize instances and annotations with proper linking"""
-        # Get final instances
-        instances = self.instance_tracker.finalize_instances()
-        self.stats["instances_created"] = len(instances)
-        
-        # Store instances and annotations
-        self.instances = instances
+        self.instances = self.instance_tracker.finalize_instances()
+        self.stats["instances_created"] = len(self.instances)
         self.sample_annotations = self.instance_tracker.get_all_annotations()
+        self._link_sample_data()
+
+    def _link_sample_data(self):
+        channel_groups: Dict[str, List[SampleDataModel]] = {}
+        for sd in self.sample_data:
+            # calibrated_sensor_token -> find sensor channel
+            # build reverse map once
+            pass
+        # Build map sensor_token -> channel
+        sensor_token_to_channel = {s.token: s.channel for s in self.sensors}
+        calib_to_channel = {cs.token: sensor_token_to_channel.get(cs.sensor_token, "") for cs in self.calibrated_sensors}
+        for sd in self.sample_data:
+            ch = calib_to_channel.get(sd.calibrated_sensor_token, "")
+            channel_groups.setdefault(ch, []).append(sd)
+        for ch, lst in channel_groups.items():
+            lst.sort(key=lambda x: x.timestamp)
+            for i, sd in enumerate(lst):
+                sd.prev = lst[i-1].token if i > 0 else ""
+                sd.next = lst[i+1].token if i < len(lst)-1 else ""
     
     def _save_json_tables(self, output_dir: Path):
         """Save all JSON tables to files (v1.0-all) with Pydantic validation."""
-        # Build pydantic models
+        # Build pydantic models (scene already Pydantic)
         try:
             tables_model = NuScenesTables(
-                scene=[SceneModel(**s.to_dict()) for s in self.scenes],
-                sample=[SampleModel(**s.to_dict()) for s in self.samples],
-                sample_data=[SampleDataModel(**sd.to_dict()) for sd in self.sample_data],
-                ego_pose=[EgoPoseModel(**ep.to_dict()) for ep in self.ego_poses],
-                sensor=[SensorModel(**se.to_dict()) for se in self.sensors],
-                calibrated_sensor=[CalibratedSensorModel(**cs.to_dict()) for cs in self.calibrated_sensors],
-                log=[LogModel(**l.to_dict()) for l in self.logs],
-                category=[CategoryModel(**c.to_dict()) for c in self.categories],
-                attribute=[AttributeModel(**a.to_dict()) for a in self.attributes],
-                visibility=[VisibilityModel(**v.to_dict()) for v in self.visibility],
-                map=[MapModel(**m.to_dict()) for m in self.maps],
-                instance=[InstanceModel(**i.to_dict()) for i in self.instances],
-                sample_annotation=[SampleAnnotationModel(**a.to_dict()) for a in self.sample_annotations]
+                scene=self.scenes,
+                sample=self.samples,
+                sample_data=self.sample_data,
+                ego_pose=self.ego_poses,
+                sensor=self.sensors,
+                calibrated_sensor=self.calibrated_sensors,
+                log=self.logs,
+                category=self.categories,
+                attribute=self.attributes,
+                visibility=self.visibility,
+                map=self.maps,
+                instance=self.instances,
+                sample_annotation=self.sample_annotations
             )
         except Exception as e:
             raise ValueError(f"Schema validation error: {e}")
@@ -607,4 +634,7 @@ class NextPointsToNuScenesConverter:
             "sample_annotation.json": [ann.model_dump() for ann in tables_model.sample_annotation]
         }
         for filename, data in tables.items():
+            # debug
+            print(f"Saving {filename} with {len(data)} records")
+
             save_json_table(data, output_dir, filename)

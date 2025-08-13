@@ -17,6 +17,7 @@ class ProjectStatus(str, Enum):
 class DataSourceType(str, Enum):
     NEXTPOINTS = "nextpoints"
     CUSTOM = "custom"
+    SUS = "sus"
 
 
 class Project(SQLModel, table=True):

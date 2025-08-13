@@ -123,7 +123,8 @@ def create_project(
 
 def get_project_metadata(
     project_name: str,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    use_presigned_urls: bool = True
 ) -> ProjectMetadataResponse:
     """
     获取项目完整元数据,用于对数据进行校验
@@ -147,7 +148,7 @@ def get_project_metadata(
 
     # 3. generate project metadata
     try:
-        project_meta_data = _generate_project_meta_data(project, s3_service)
+        project_meta_data = _generate_project_meta_data(project, s3_service,use_presigned_urls)
         return project_meta_data
     except Exception as e:
         # 捕获生成 meta.json 时的任何异常
@@ -300,6 +301,7 @@ def save_world_list(
 def _generate_project_meta_data(
     project: Project,
     s3_service: S3Service,
+    use_presigned_urls: bool,
     main_channel: Optional[str] = "lidar-fusion"
 ) -> ProjectMetadataResponse:
     """
@@ -351,8 +353,12 @@ def _generate_project_meta_data(
             created_at=project.created_at.isoformat(),
         )
 
+    def _as_key(s3: S3Service, project: Project, bucket_key: str) -> str:
+        """将 S3 对象键转换为项目内的相对路径"""
+        return bucket_key
+
     def _as_url(s3: S3Service, project: Project, bucket_key: str) -> str:
-        """如需 URL，可用该函数替换 _as_key 的调用"""
+        """如需 URL,可用该函数替换 _as_key 的调用"""
         return s3.get_object_url(
             bucket_name=project.bucket_name,
             object_key=bucket_key,
@@ -475,7 +481,10 @@ def _generate_project_meta_data(
         for ch in lidar_channels.keys():
             key = lidar_index.get((ch, ts))
             if key:
-                lidars[ch] = _as_url(s3_service, project, key)
+                if use_presigned_urls:
+                    lidars[ch] = _as_url(s3_service, project, key)
+                else:
+                    lidars[ch] = _as_key(s3_service, project, key)
         if main_channel not in lidars:
             # 按理不会发生（baseline 来源于 main_channel），严防一致性问题
             raise ValueError(f"时间戳 {ts} 缺少主通道 {main_channel} 的点云。")

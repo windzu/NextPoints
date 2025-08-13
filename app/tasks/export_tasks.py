@@ -47,6 +47,10 @@ def export_to_nuscenes_task(
     Returns:
         任务结果字典
     """
+    request = NuScenesExportRequest.model_validate(export_request)
+
+
+
     try:
         with next(get_session()) as session:
             # 更新任务状态为处理中
@@ -59,8 +63,6 @@ def export_to_nuscenes_task(
                 }
             )
             # 1. 验证项目是否存在
-            export_request = NuScenesExportRequest(**export_request)
-
             project: Optional[Project] = session.exec(
                 select(Project).where(Project.name == project_name)
             ).first()
@@ -84,27 +86,38 @@ def export_to_nuscenes_task(
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # 4. 执行转换
+            self.update_state(
+                state=ExportStatus.PROCESSING,
+                meta={
+                    "message": "converting to NuScenes format",
+                }
+            )
             result = _perform_nuscenes_conversion(
                 project_metadata=project_metadata,
-                export_request=export_request,
+                export_request=request,
                 output_dir=output_dir
             )
+            print(f"output_dir: {output_dir}")
 
-            # debug
-            # echo output_dir
-            print(f"Output directory: {output_dir}")
         
-            # # 5. 压缩输出文件
-            # self.update_state(
-            #     state=ExportStatus.PROCESSING,
-            #     meta={
-            #         "progress": 90,
-            #         "current_step": "Compressing output files",
-            #         "message": "Creating archive file"
-            #     }
-            # )
-            # 
-            # archive_path = _create_archive(output_dir, project_name)
+            # 5. upload to S3
+            self.update_state(
+                state=ExportStatus.PROCESSING,
+                meta={"message": "Uploading to S3"}
+            )
+            s3_service = S3Service(
+                access_key_id=project.access_key_id,
+                secret_access_key=project.secret_access_key,
+                endpoint_url=project.s3_endpoint,
+                region_name=project.region_name
+            )
+            s3_service.upload_folder(
+                local_folder_path=str(output_dir),
+                bucket_name=project.bucket_name,
+                object_prefix=f"{project.name}/nuscenes/",
+                include_folder_name=False
+            )
+
             
             # 6. 清理临时文件
             # shutil.rmtree(output_dir)

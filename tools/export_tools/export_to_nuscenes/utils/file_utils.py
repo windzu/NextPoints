@@ -4,6 +4,7 @@ File utilities for NuScenes export
 import os
 import json
 import shutil
+import urllib.request
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -59,35 +60,20 @@ def copy_sensor_data(
     target_path: Path,
     filename: str
 ) -> bool:
-    """
-    Copy sensor data file from source to target
-    
-    Args:
-        source_url: Source file URL or path
-        target_path: Target directory path
-        filename: Target filename
-        
-    Returns:
-        True if copy successful, False otherwise
-    """
+    """Copy/download sensor data file. Raises on failure per strict policy."""
     try:
-        # Handle different source types (S3 URL, local path, etc.)
-        if source_url.startswith('http'):
-            # For HTTP/S3 URLs, would need to download
-            # For now, just create placeholder
-            target_file = target_path / filename
-            target_file.touch()
+        target_file = target_path / filename
+        if source_url.startswith('http://') or source_url.startswith('https://'):
+            # Download remote (presigned) resource
+            urllib.request.urlretrieve(source_url, target_file)
             return True
         elif os.path.exists(source_url):
-            # Local file copy
-            target_file = target_path / filename
             shutil.copy2(source_url, target_file)
             return True
         else:
-            return False
+            raise ValueError(f"Unsupported or missing source path: {source_url}")
     except Exception as e:
-        print(f"Error copying sensor data: {e}")
-        return False
+        raise ValueError(f"Failed to copy sensor data from {source_url} -> {filename}: {e}")
 
 
 def generate_nuscenes_filename(
@@ -114,37 +100,49 @@ def generate_nuscenes_filename(
     return f"{scene_name}_{sensor_channel}_{timestamp}{file_extension}"
 
 
-def validate_nuscenes_structure(output_dir: Path) -> List[str]:
-    """
-    Validate generated NuScenes directory structure (v1.0-all variant).
-    
-    Args:
-        output_dir: Output directory to validate
-        
-    Returns:
-        List of validation errors (empty if valid)
+def validate_nuscenes_structure(output_dir: Path, main_channel: Optional[str] = None) -> List[str]:
+    """Validate generated NuScenes directory structure and file presence.
+    Checks:
+      - Required directories & JSON files.
+      - Each sample_data entry's filename exists.
+      - At least one point cloud (pcd) file present (optionally in main_channel).
     """
     errors: List[str] = []
-    
-    # Required directories
     required_dirs = ['samples', 'v1.0-all']
     for dir_name in required_dirs:
         if not (output_dir / dir_name).exists():
             errors.append(f"Missing required directory: {dir_name}")
-    
-    # Required JSON files
     required_files = [
         'scene.json', 'sample.json', 'sample_data.json', 'sample_annotation.json',
         'instance.json', 'ego_pose.json', 'calibrated_sensor.json', 'sensor.json',
         'category.json', 'attribute.json', 'visibility.json', 'log.json', 'map.json'
     ]
-    
     v1_dir = output_dir / 'v1.0-all'
     if v1_dir.exists():
         for filename in required_files:
             if not (v1_dir / filename).exists():
                 errors.append(f"Missing required file: v1.0-all/{filename}")
-    
+    # Load sample_data and verify referenced files
+    pcd_count = 0
+    if (v1_dir / 'sample_data.json').exists():
+        try:
+            with open(v1_dir / 'sample_data.json', 'r', encoding='utf-8') as f:
+                sd_list = json.load(f)
+            for entry in sd_list:
+                rel = entry.get('filename')
+                if not rel:
+                    errors.append(f"sample_data {entry.get('token')} missing filename")
+                    continue
+                file_path = output_dir / rel
+                if not file_path.exists():
+                    errors.append(f"Referenced data file missing: {rel}")
+                if entry.get('fileformat') == 'pcd':
+                    if (not main_channel) or (main_channel and main_channel in rel):
+                        pcd_count += 1
+        except Exception as e:
+            errors.append(f"Failed to inspect sample_data.json: {e}")
+    if pcd_count == 0:
+        errors.append("No point cloud files found for main channel" + (f" {main_channel}" if main_channel else ""))
     return errors
 
 

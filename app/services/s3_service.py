@@ -268,7 +268,7 @@ class S3Service:
             timestamp_pattern = r'(\d{10,})' # 匹配10位以上的数字作为时间戳
             
             for obj in objects:
-                key = obj['key']
+                key = obj
                 
                 # 提取时间戳
                 timestamp_match = re.search(timestamp_pattern, os.path.basename(key))
@@ -400,5 +400,106 @@ class S3Service:
                 return match.group(1) if match.groups() else match.group(0)
         
         return "default"
-    
 
+    def upload_file(self, local_path: str, bucket_name: str, object_key: str) -> bool:
+        """
+        上传单个文件到 MinIO。
+
+        :param local_path: 本地文件的完整路径
+        :param bucket_name: 目标 Bucket 名称
+        :param object_key: 在 Bucket 中的对象键 (路径)
+        :return: True 如果成功, False 如果失败
+        """
+        try:
+            # 获取扩展名并转换小写
+            _, ext = os.path.splitext(object_key)
+            ext = ext.lower()
+            # 优先用自定义映射
+            content_type = CONTENT_TYPE_MAP.get(ext)
+            if not content_type:
+                # 没匹配到则用 mimetypes 猜
+                guessed, _ = mimetypes.guess_type(local_path)
+                content_type = guessed or "application/octet-stream"
+                
+            # 上传文件
+            self.s3_client.upload_file(
+                Filename=local_path,
+                Bucket=bucket_name,
+                Key=object_key,
+                ExtraArgs={
+                    "ContentType": content_type,  # 设置内容类型
+                    "ContentDisposition": "inline"  # 让浏览器内联预览
+                }
+            )
+            # self.s3_client.upload_file(local_path, bucket_name, object_key)
+            return True
+        except ClientError as e:
+            logging.error(f"上传文件失败: {e}")
+            return False
+        except FileNotFoundError:
+            logging.error(f"本地文件未找到: {local_path}")
+            return False
+
+
+    def upload_folder(
+        self,
+        local_folder_path: str,
+        bucket_name: str,
+        object_prefix: str = "",
+        include_folder_name: bool = True,
+    ):
+        """
+        上传整个文件夹到 MinIO。
+
+        :param local_folder_path: 本地文件夹的完整路径
+        :param bucket_name: 目标 Bucket 名称
+        :param object_prefix: 在 Bucket 中的对象前缀 (模拟的文件夹路径)
+        :param include_folder_name: 是否包含文件夹名称本身，默认 True
+        :return: 上传成功的文件数量
+        """
+        # 标准化路径，移除末尾的斜杠
+        local_folder_path = os.path.normpath(local_folder_path)
+
+        if not os.path.isdir(local_folder_path):
+            logging.error(f"本地文件夹不存在: {local_folder_path}")
+            return 0
+
+        uploaded_count = 0
+        failed_count = 0
+
+        # 确保 object_prefix 以 '/' 结尾（如果不为空）
+        if object_prefix and not object_prefix.endswith("/"):
+            object_prefix += "/"
+
+        # 如果需要包含文件夹名称，添加到前缀中
+        if include_folder_name:
+            folder_name = os.path.basename(local_folder_path)
+            object_prefix = object_prefix + folder_name + "/"
+
+        try:
+            # 遍历文件夹中的所有文件
+            for root, dirs, files in os.walk(local_folder_path):
+                for file in files:
+                    # 获取文件的完整路径
+                    local_file_path = os.path.join(root, file)
+
+                    # 计算相对路径
+                    relative_path = os.path.relpath(local_file_path, local_folder_path)
+
+                    # 构建 MinIO 中的对象键，使用 '/' 作为分隔符
+                    object_key = object_prefix + relative_path.replace(os.sep, "/")
+
+                    # 上传文件
+                    if self.upload_file(local_file_path, bucket_name, object_key):
+                        uploaded_count += 1
+                    else:
+                        failed_count += 1
+
+            logging.info(
+                f"文件夹上传完成。成功: {uploaded_count} 个文件，失败: {failed_count} 个文件"
+            )
+            return uploaded_count
+
+        except Exception as e:
+            logging.error(f"上传文件夹时发生错误: {e}")
+            return uploaded_count
