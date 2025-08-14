@@ -60,8 +60,7 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
             if (selector) {
                 let optionsHtml = `<option value="">${status}</option>`;
                 projectsByStatus[status].forEach(project => {
-                    // 使用项目名称作为value，这样API调用时可以直接使用
-                    optionsHtml += `<option value="${project.name}">${project.name} (${project.frame_count} frames)</option>`;
+                    optionsHtml += `<option value="${project.name}">${project.name}</option>`; // removed frame_count display
                 });
                 selector.innerHTML = optionsHtml;
             }

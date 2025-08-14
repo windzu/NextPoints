@@ -95,7 +95,7 @@ export class ProjectManager {
         projects.forEach(project => {
             const option = document.createElement('option');
             option.value = project.id;
-            option.textContent = `${project.name} (${project.frame_count} frames)`;
+            option.textContent = `${project.name}`; // removed frame_count
             option.dataset.projectData = JSON.stringify(project);
             selector.appendChild(option);
         });
