@@ -24,8 +24,7 @@ class FrameInfo {
     }
 
     get_pcd_path() {
-        // log
-        logger.log(`get_pcd_path: ${this.sceneMeta.frameDetails[this.frame].pointcloud_url}`);
+        console.log(`get_pcd_path: ${this.sceneMeta.frameDetails[this.frame].pointcloud_url}`);
         return this.sceneMeta.frameDetails[this.frame].pointcloud_url;
     }
 

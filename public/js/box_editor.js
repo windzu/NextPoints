@@ -1426,6 +1426,65 @@ function BoxEditorManager(parentUi, viewManager, objectTrackView,
         };
     }
 
+    // New: Update Status button logic
+    const updateStatusBtn = this.toolbox.querySelector('#update-status');
+    if (updateStatusBtn) {
+        updateStatusBtn.onclick = async () => {
+            const header = this.header || this.editor?.header || window.editor?.header;
+            if (!header || !header.getSelectedProjectName) {
+                alert('Header not ready');
+                return;
+            }
+            const projectName = header.getSelectedProjectName();
+            if (!projectName) {
+                window.editor?.infoBox?.show?.('Notice', '请先选择一个项目 (Select a project first)');
+                return;
+            }
+            const currentProject = this.data.getProjectByName?.(projectName);
+            const currentStatus = currentProject?.status;
+            const statusOptions = ['unstarted', 'in_progress', 'completed', 'reviewed'];
+            let choice = await new Promise(resolve => {
+                window.editor?.infoBox?.show?.('Update Status', `项目: ${projectName}<br>当前状态: ${currentStatus || '(unknown)'}<br>选择新状态:`, [...statusOptions, 'cancel'], sel => resolve(sel));
+            });
+            if (!choice || choice === 'cancel') return;
+            if (choice === currentStatus) return; // no change
+            try {
+                updateStatusBtn.style.opacity = '0.5';
+                updateStatusBtn.style.pointerEvents = 'none';
+                const resp = await fetch(`/api/projects/${encodeURIComponent(projectName)}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: choice })
+                });
+                if (!resp.ok) {
+                    const msg = await resp.text();
+                    throw new Error(`HTTP ${resp.status}: ${msg}`);
+                }
+                const updated = await resp.json();
+                // refresh list
+                const list = await this.data.readProjectList();
+                header.updateProjectSelectors?.(list);
+                // select the project in its new status selector
+                const newStatus = updated.status;
+                const sel = header.projectSelectors?.[newStatus];
+                if (sel) {
+                    // find option by value = project name
+                    for (const opt of sel.options) {
+                        if (opt.value === projectName) { sel.value = projectName; break; }
+                    }
+                    header.resetOtherProjectSelectors?.(sel);
+                }
+                window.editor?.infoBox?.show?.('Success', `状态已更新为 ${newStatus}`);
+            } catch (err) {
+                console.error('Update status failed', err);
+                window.editor?.infoBox?.show?.('Error', `更新失败: ${err.message}`);
+            } finally {
+                updateStatusBtn.style.opacity = '';
+                updateStatusBtn.style.pointerEvents = '';
+            }
+        };
+    }
+
     this.toolbox.querySelector("#exit").onclick = () => {
         this.hide();
 

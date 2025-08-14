@@ -107,6 +107,12 @@ class ConfigUi {
             return true;
         },
 
+        // New: Update project status menu item
+        "#cfg-update-project-status": (event) => {
+            // Do nothing on main item click to keep submenu open
+            return false; // prevent menu auto-hide
+        },
+
     };
 
     changeableItems = {
@@ -261,11 +267,13 @@ class ConfigUi {
         "#cfg-calib-camera-LiDAR",
         "#cfg-experimental",
         "#cfg-data",
+        "#cfg-update-project-status", // keep submenu open
     ];
 
     subMenus = [
         "#cfg-experimental",
         "#cfg-data",
+        "#cfg-update-project-status",
     ];
 
     constructor(button, wrapper, editor) {
@@ -320,7 +328,6 @@ class ConfigUi {
                     clearTimeout(this.timerId);
                     this.timerId = null;
                 }
-
                 event.currentTarget.querySelector(item + "-submenu").style.display = "inherit";
             }
 
@@ -352,6 +359,50 @@ class ConfigUi {
         this.menu.querySelector("#cfg-data-preload-checkbox").checked = pointsGlobalConfig.enablePreload;
         this.menu.querySelector("#cfg-auto-rotate-xy-checkbox").checked = pointsGlobalConfig.enableAutoRotateXY;
         this.menu.querySelector("#cfg-auto-update-interpolated-boxes-checkbox").checked = pointsGlobalConfig.autoUpdateInterpolatedBoxes;
+
+        // Bind status submenu items (after submenu logic)
+        const statusSub = this.menu.querySelector('#cfg-update-project-status-submenu');
+        if (statusSub) {
+            statusSub.querySelectorAll('.status-option').forEach(opt => {
+                opt.onclick = async (e) => {
+                    e.stopPropagation();
+                    const status = opt.getAttribute('data-status');
+                    const header = this.editor.header;
+                    const projectName = header.getSelectedProjectName?.();
+                    if (!projectName) {
+                        this.editor.infoBox.show('Notice', '请先选择一个项目 (Select a project first)');
+                        return;
+                    }
+                    try {
+                        const resp = await fetch(`/api/projects/${encodeURIComponent(projectName)}/status`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status })
+                        });
+                        if (!resp.ok) {
+                            const msg = await resp.text();
+                            throw new Error(`HTTP ${resp.status}: ${msg}`);
+                        }
+                        const updated = await resp.json();
+                        const list = await this.editor.data.readProjectList();
+                        header.updateProjectSelectors?.(list);
+                        const sel = header.projectSelectors?.[updated.status];
+                        if (sel) {
+                            for (const opt2 of sel.options) {
+                                if (opt2.value === projectName) { sel.value = projectName; break; }
+                            }
+                            header.resetOtherProjectSelectors?.(sel);
+                        }
+                        this.editor.infoBox.show('Success', `状态已更新为 ${updated.status}`);
+                        // auto hide submenu after selection
+                        statusSub.style.display = 'none';
+                    } catch (err) {
+                        console.error('Update status failed', err);
+                        this.editor.infoBox.show('Error', `更新失败: ${err.message}`);
+                    }
+                };
+            });
+        }
     }
 
 

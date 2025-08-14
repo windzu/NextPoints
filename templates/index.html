@@ -1020,6 +1020,24 @@
 						<span>Create Project</span>
 					</div>
 
+					<!-- Update Project Status submenu -->
+					<div class="menu-item" id="cfg-update-project-status">
+						<span>Update Project Status</span>
+						<div class="menu-item-arrow menu-item-icon">
+							<svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" focusable="false" class="svg-menu-icon">
+								<g>
+									<path d="M12 8 L 18 12 L 12 16Z"></path>
+								</g>
+							</svg>
+						</div>
+						<div id="cfg-update-project-status-submenu">
+							<div class="menu-item status-option" data-status="unstarted"><span>unstarted</span></div>
+							<div class="menu-item status-option" data-status="in_progress"><span>in_progress</span></div>
+							<div class="menu-item status-option" data-status="completed"><span>completed</span></div>
+							<div class="menu-item status-option" data-status="reviewed"><span>reviewed</span></div>
+						</div>
+					</div>
+
 					<div class="menu-item" id="cfg-delete-current-project">
 						<span>Delete Current Project</span>
 					</div>
@@ -1356,7 +1374,7 @@
 					<rect x="110" y="120" width="20" height="20" fill="#00000000" class="line-handle  se-handle"
 						id="bottom-right-handle" />
 
-					<rect x="100" y="110" width="20" height="20" , fill="#00000000" class="line-handle  grab-handle"
+					<rect x="100" y="110" width="20" height="20" fill="#00000000" class="line-handle  grab-handle"
 						id="move-handle" />
 
 				</svg>
@@ -1482,15 +1500,7 @@
 					</div>
 				</div>
 
-
-				<!-- 项目管理按钮 -->
-				<div class="project-management-buttons">
-					<div class="menu-button" id="create-project">Create Project</div>
-					<div class="menu-button" id="delete-project">Delete Project</div>
-					<div class="menu-button" id="update-status">Update Status</div>
-				</div>
-
-				<!-- 原有的功能按钮 -->
+				<!-- 多帧编辑中的功能按钮 -->
 				<div class="menu-button" id="exit">Exit</div>
 				<div class="menu-button" id="prev">Previous</div>
 				<div class="menu-button" id="next">Next</div>
@@ -1500,6 +1510,7 @@
 				<div class="menu-button" id="interpolate">Interpolate</div>
 				<div class="menu-button" id="reload">Reload</div>
 				<div class="menu-button" id="finalize">Finalize</div>
+
 
 			</div>
 		</div>
@@ -1530,11 +1541,8 @@
 						</div>
 						
 						<div class="form-group">
-							<label for="description">Description:</label>
-							<textarea id="description" name="description"></textarea>
-						</div>
 						
-						<div class="form-group">
+						
 							<label for="bucket-name">Bucket Name:</label>
 							<input type="text" id="bucket-name" name="bucket_name" required>
 						</div>
