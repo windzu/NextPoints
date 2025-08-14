@@ -1,6 +1,7 @@
 """
 Celery 应用配置
 """
+
 from celery import Celery
 import os
 
@@ -11,7 +12,8 @@ celery_app = Celery(
     backend=os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0"),
     include=[
         "app.tasks.export_tasks",  # 导出任务模块
-    ]
+        "app.tasks.project_tasks",  # 项目任务模块
+    ],
 )
 
 # Celery 配置
@@ -20,22 +22,17 @@ celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    
     # 时区设置
     timezone="UTC",
     enable_utc=True,
-    
     # 任务超时设置
     task_time_limit=3600,  # 1 小时硬超时
     task_soft_time_limit=3300,  # 55 分钟软超时
-    
     # 任务重试设置
     task_acks_late=True,
     worker_prefetch_multiplier=1,
-    
     # 结果保存时间
     result_expires=86400,  # 24 小时后清理结果
-    
     # 任务状态追踪
     task_track_started=True,
     task_ignore_result=False,

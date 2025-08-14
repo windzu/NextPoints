@@ -1,6 +1,5 @@
-# tools/custom2nextpoints.py
+# tools/import_tools/custom2nextpoints.py
 
-import json
 import os
 from app.services.s3_service import S3Service
 from app.models.calibration_model import CalibrationMetadata
@@ -8,7 +7,14 @@ from tools.utils import find_nearest_timestamp, fuse_pointclouds
 from rich import progress
 
 
-def custom2nextpoints(scene_name: str,bucket:str,s3_service: S3Service,main_channel:str,time_interval_s:float,fusion_lidar:bool=True) -> bool:
+def custom2nextpoints(
+    scene_name: str,
+    bucket: str,
+    s3_service: S3Service,
+    main_channel: str,
+    time_interval_s: float,
+    fusion_lidar: bool = True,
+) -> bool:
 
     custom_prefix = f"{scene_name}/custom"
     nextpoints_prefix = f"{scene_name}/nextpoints"
@@ -78,7 +84,6 @@ def custom2nextpoints(scene_name: str,bucket:str,s3_service: S3Service,main_chan
     camera_map = {k: v for k, v in camera_map.items() if v}
     lidar_map = {k: v for k, v in lidar_map.items() if v}
     ego_pose_map = {k: v for k, v in ego_pose_map.items() if v}
-    
 
     # Step 3: upload calibration files
     custom_calib_files = s3_service.list_objects(bucket, calib_prefix)
@@ -122,22 +127,12 @@ def custom2nextpoints(scene_name: str,bucket:str,s3_service: S3Service,main_chan
             "pose": {
                 "parent_frame_id": "base_link",
                 "child_frame_id": "lidar-fusion",
-                "transform":{
-                    "translation": {
-                        "x": 0.0,
-                        "y": 0.0,
-                        "z": 0.0
-                    },
-                    "rotation": {
-                        "x": 0.0,
-                        "y": 0.0,
-                        "z": 0.0,
-                        "w": 1.0
-                    }
+                "transform": {
+                    "translation": {"x": 0.0, "y": 0.0, "z": 0.0},
+                    "rotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
                 },
             },
-            "ignore_areas": []
-           
+            "ignore_areas": [],
         }
 
         CalibrationMetadata.model_validate(fusion_calib)
@@ -147,9 +142,11 @@ def custom2nextpoints(scene_name: str,bucket:str,s3_service: S3Service,main_chan
     # Step 4: 遍历采样时间戳，做同步拷贝
     lidar_channels = list(lidar_map.keys())
     camera_channels = list(camera_map.keys())
-    nextpoints_calib_files = s3_service.list_objects(bucket, f"{nextpoints_prefix}/calib")
+    nextpoints_calib_files = s3_service.list_objects(
+        bucket, f"{nextpoints_prefix}/calib"
+    )
 
-    calib_params={}
+    calib_params = {}
     for f in nextpoints_calib_files:
         if f.endswith(".json"):
             channel = os.path.basename(f).split(".")[0]

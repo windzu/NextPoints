@@ -21,13 +21,14 @@ from app.celery_app import celery_app
 from app.models.export_model import ExportStatus, NuScenesExportRequest
 from app.models.annotation_model import AnnotationItem
 from app.database import get_session
-from app.services.project_service import get_project_metadata
+
 from app.services.s3_service import S3Service
 from app.models.export_model import NuScenesExportRequest
 from app.models.meta_data_model import ProjectMetadataResponse
 from app.models.project_model import Project
 
 from tools.export_tools.export_to_nuscenes import NextPointsToNuScenesConverter
+from tools.project_metadata import get_project_metadata
 
 redis_client = redis.Redis.from_url(celery_app.conf.broker_url)
 
@@ -56,11 +57,7 @@ def export_to_nuscenes_task(
             # 更新任务状态为处理中
             self.update_state(
                 state=ExportStatus.PROCESSING,
-                meta={
-                    "progress": 0,
-                    "current_step": "Initializing export task",
-                    "message": "Starting NuScenes export process"
-                }
+                meta={"message": "Starting NuScenes export process"}
             )
             # 1. 验证项目是否存在
             project: Optional[Project] = session.exec(
@@ -120,7 +117,7 @@ def export_to_nuscenes_task(
 
             
             # 6. 清理临时文件
-            # shutil.rmtree(output_dir)
+            shutil.rmtree(output_dir)
         
             # 7. 返回成功结果
             return {

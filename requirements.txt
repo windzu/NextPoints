@@ -5,6 +5,8 @@ filterpy
 cheroot != 8.4.4
 protobuf == 3.20.0
 numpy == 1.19.5
+rich
+wind-pypcd
 
 # cherrypy(will be deprecated in future)
 cherrypy

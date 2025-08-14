@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel
 
+from app.models.status_model import TaskStatus
+
 
 # Database Models
 
@@ -65,6 +67,11 @@ class ProjectCreateRequest(BaseModel):
     main_channel: str = "lidar-fusion"
     time_interval: float = 0.5  # 时间间隔，单位为秒
 
+class ProjectCreateResponse(BaseModel):
+    """项目响应模型"""
+    project_name: str
+    status: TaskStatus
+    message: Optional[str]
 
 class ProjectResponse(BaseModel):
     """项目响应模型"""
