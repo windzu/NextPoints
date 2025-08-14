@@ -938,61 +938,69 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
     };
 
     this.scene_changed = async function (sceneName) {
-        // debug
         console.log("scene changed", sceneName);
+        if (!sceneName || sceneName.length === 0) return;
 
-        if (sceneName.length == 0) {
+        // If switching to a different project than current world, clear current world so frame_changed won't reuse old name
+        if (this.data.world && this.data.world.frameInfo.scene !== sceneName) {
+            this.data.world = null;
+        }
+
+        let meta = this.data.getMetaBySceneName(sceneName);
+        if (!meta) {
+            this.editorUi.querySelector("#frame-selector").innerHTML = "<option>--frame--</option>";
+            try {
+                meta = await this.data.readSceneMetaData(sceneName);
+            } catch (err) {
+                console.error("Failed to load scene metadata", sceneName, err);
+                return;
+            }
+        }
+
+        if (!meta || !meta.frames || meta.frames.length === 0) {
+            this.editorUi.querySelector("#frame-selector").innerHTML = "<option>--frame--</option>";
+            console.warn("No frames for scene", sceneName);
             return;
         }
 
-        var meta = this.data.getMetaBySceneName(sceneName);
-
-        if (!meta) {
-            this.editorUi.querySelector("#frame-selector").innerHTML = "<option>--frame--</option>";
-            meta = await this.data.readSceneMetaData(sceneName);
-        }
-
-        var frame_selector_str = meta.frames.map(function (f) {
-            return `<option value="${f}">${f}</option>`;
-        }).reduce(function (x, y) { return x + y; }, "<option>--frame--</option>");
-
+        const frame_selector_str = meta.frames.reduce((html, f) => html + `<option value="${f}">${f}</option>`, "<option>--frame--</option>");
         this.editorUi.querySelector("#frame-selector").innerHTML = frame_selector_str;
-
 
         if (meta.camera) {
             this.imageContextManager.updateCameraList(meta.camera);
         }
+
+        // Auto-load first frame on project switch
+        const firstFrame = meta.frames[0];
+        if (firstFrame) {
+            this.load_world(sceneName, firstFrame);
+            this.editorUi.querySelector("#frame-selector").value = firstFrame;
+        }
     };
 
     this.frame_changed = function (event) {
-        // debug
-        console.log("frame changed", event.currentTarget.value);
+        const frameVal = event.currentTarget.value;
+        console.log("frame changed", frameVal);
+        if (!frameVal || frameVal === "--frame--") return;
 
-        // 现在使用项目选择器替代了 scene-selector，从 data.world 获取 sceneName
-        // 首先尝试从data.world获取，如果没有则从项目选择器获取
-        var sceneName = "";
-
-        if (this.data.world) {
-            sceneName = this.data.world.frameInfo.scene;
-        } else {
-            // 尝试从项目选择器获取当前选中的项目
-            const projectSelectors = this.editorUi.querySelectorAll('.project-selector');
-            for (let selector of projectSelectors) {
-                if (selector.value) {
-                    sceneName = selector.value;
-                    console.log("DEBUG: frame_changed - got sceneName from project selector:", sceneName);
-                    break;
-                }
-            }
+        // Prefer currently selected project selector value over existing world scene (avoids stale scene name)
+        let selectedScene = "";
+        const projectSelectors = this.editorUi.querySelectorAll('.project-selector');
+        for (let selector of projectSelectors) {
+            if (selector.value) { selectedScene = selector.value; break; }
         }
-
-        if (!sceneName || sceneName.length == 0) {
-            console.log("DEBUG: frame_changed - sceneName is empty, returning");
+        if (!selectedScene && this.data.world) selectedScene = this.data.world.frameInfo.scene; // fallback
+        if (!selectedScene) {
+            console.warn("frame_changed: no scene selected");
             return;
         }
 
-        var frame = event.currentTarget.value;
-        this.load_world(sceneName, frame);
+        // If current world exists but is different project, discard it
+        if (this.data.world && this.data.world.frameInfo.scene !== selectedScene) {
+            this.data.world = null;
+        }
+
+        this.load_world(selectedScene, frameVal);
         event.currentTarget.blur();
     };
 
@@ -2337,6 +2345,8 @@ function Editor(editorUi, wrapperUi, editorCfg, data, name = "editor") {
         this.viewManager.mainView.orbit.target.x += newOffset[0];
         this.viewManager.mainView.orbit.target.y += newOffset[1];
         this.viewManager.mainView.orbit.target.z += newOffset[2];
+
+
 
         this.viewManager.mainView.camera.position.x += newOffset[0];
         this.viewManager.mainView.camera.position.y += newOffset[1];

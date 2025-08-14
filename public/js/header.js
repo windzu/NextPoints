@@ -82,9 +82,9 @@ var Header = function (ui, data, cfg, onProjectChanged, onFrameChanged, onObject
         if (selector) {
             selector.onchange = (e) => {
                 if (e.target.value) {
-                    // 重置其他项目选择器
                     this.resetOtherProjectSelectors(e.target);
                     this.onProjectChanged(e);
+                    // Auto-select first frame after project switch (scene_changed will rebuild frame list and auto-load)
                 }
             };
         }
