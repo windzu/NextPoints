@@ -1,15 +1,18 @@
 """Pydantic schema & validation for NuScenes export (v1.0-all variant).
 Strictly matches official table fields; provides cross-table validation.
 """
+
 from __future__ import annotations
 from typing import List, Optional, Dict, Any, Set
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
 import math
 
-UUID_LEN = 36  # canonical uuid string length with hyphens
+UUID_LEN = 32  # canonical uuid string length with hyphens
+
 
 class _TokenModel(BaseModel):
     token: str = Field(min_length=UUID_LEN, max_length=UUID_LEN)
+
 
 class SceneModel(_TokenModel):
     name: str
@@ -19,11 +22,13 @@ class SceneModel(_TokenModel):
     first_sample_token: str
     last_sample_token: str
 
+
 class SampleModel(_TokenModel):
     timestamp: int
     prev: str
     next: str
     scene_token: str
+
 
 class SampleDataModel(_TokenModel):
     sample_token: str
@@ -38,6 +43,7 @@ class SampleDataModel(_TokenModel):
     height: Optional[int] = None
     width: Optional[int] = None
 
+
 class EgoPoseModel(_TokenModel):
     timestamp: int
     rotation: List[float]  # w,x,y,z
@@ -50,14 +56,16 @@ class EgoPoseModel(_TokenModel):
         if len(self.translation) != 3:
             raise ValueError("ego_pose.translation must have 3 floats")
         # normalize check
-        norm = math.sqrt(sum(c*c for c in self.rotation))
+        norm = math.sqrt(sum(c * c for c in self.rotation))
         if not (0.999 <= norm <= 1.001):
             raise ValueError("ego_pose.rotation quaternion not normalized")
         return self
 
+
 class SensorModel(_TokenModel):
     channel: str
     modality: str
+
 
 class CalibratedSensorModel(_TokenModel):
     sensor_token: str
@@ -71,13 +79,16 @@ class CalibratedSensorModel(_TokenModel):
             raise ValueError("calibrated_sensor.translation must be 3 elements")
         if len(self.rotation) != 4:
             raise ValueError("calibrated_sensor.rotation must be 4 elements")
-        norm = math.sqrt(sum(c*c for c in self.rotation))
+        norm = math.sqrt(sum(c * c for c in self.rotation))
         if not (0.999 <= norm <= 1.001):
             raise ValueError("calibrated_sensor.rotation quaternion not normalized")
         if self.camera_intrinsic is not None:
-            if len(self.camera_intrinsic) != 3 or any(len(r) != 3 for r in self.camera_intrinsic):
+            if len(self.camera_intrinsic) != 3 or any(
+                len(r) != 3 for r in self.camera_intrinsic
+            ):
                 raise ValueError("camera_intrinsic must be 3x3 matrix")
         return self
+
 
 class LogModel(_TokenModel):
     logfile: str
@@ -85,29 +96,44 @@ class LogModel(_TokenModel):
     date_captured: str
     location: str
 
+
 class CategoryModel(_TokenModel):
     name: str
     description: str
+
 
 class AttributeModel(_TokenModel):
     name: str
     description: str
 
+
 class VisibilityModel(BaseModel):
-    token: str # 与其他token不一样，Visibility token 是 1，2，3，4
+    token: str  # 与其他token不一样，Visibility token 是 1，2，3，4
     level: str
     description: str
+
 
 class MapModel(_TokenModel):
     log_tokens: List[str]
     category: str
     filename: str
 
+    @model_validator(mode="after")
+    def check_filename(self):
+        expected = f"maps/{self.token}.png"
+        if self.filename != expected:
+            raise ValueError(
+                f"filename 必须是 '{expected}'，但当前是 '{self.filename}'"
+            )
+        return self
+
+
 class InstanceModel(_TokenModel):
     category_token: str
     nbr_annotations: int
     first_annotation_token: str
     last_annotation_token: str
+
 
 class SampleAnnotationModel(_TokenModel):
     sample_token: str
@@ -132,10 +158,11 @@ class SampleAnnotationModel(_TokenModel):
             raise ValueError("sample_annotation.size values must be >0")
         if len(self.rotation) != 4:
             raise ValueError("sample_annotation.rotation must have 4 floats")
-        norm = math.sqrt(sum(c*c for c in self.rotation))
+        norm = math.sqrt(sum(c * c for c in self.rotation))
         if not (0.999 <= norm <= 1.001):
             raise ValueError("sample_annotation.rotation quaternion not normalized")
         return self
+
 
 class NuScenesTables(BaseModel):
     scene: List[SceneModel]
@@ -159,7 +186,7 @@ def cross_validate(tables: NuScenesTables) -> List[str]:
     seen: Set[str] = set()
     for name, records in tables.model_dump().items():  # type: ignore
         for rec in records:
-            tok = rec['token']
+            tok = rec["token"]
             if tok in seen:
                 errors.append(f"Duplicate token across tables: {tok} (table {name})")
             seen.add(tok)
@@ -176,7 +203,9 @@ def cross_validate(tables: NuScenesTables) -> List[str]:
             errors.append(f"Scene {sc.token} last_sample_token missing")
         sample_list = scene_samples.get(sc.token, [])
         if sc.nbr_samples != len(sample_list):
-            errors.append(f"Scene {sc.token} nbr_samples mismatch {sc.nbr_samples}!={len(sample_list)}")
+            errors.append(
+                f"Scene {sc.token} nbr_samples mismatch {sc.nbr_samples}!={len(sample_list)}"
+            )
     # Sample chain integrity (prev/next symmetry)
     for s in tables.sample:
         if s.prev:
@@ -197,36 +226,56 @@ def cross_validate(tables: NuScenesTables) -> List[str]:
     # sample_data fk
     for sd in tables.sample_data:
         if sd.sample_token not in sample_tokens:
-            errors.append(f"sample_data {sd.token} references missing sample {sd.sample_token}")
+            errors.append(
+                f"sample_data {sd.token} references missing sample {sd.sample_token}"
+            )
         if sd.ego_pose_token not in ego_pose_tokens:
-            errors.append(f"sample_data {sd.token} missing ego_pose {sd.ego_pose_token}")
+            errors.append(
+                f"sample_data {sd.token} missing ego_pose {sd.ego_pose_token}"
+            )
         if sd.calibrated_sensor_token not in calib_tokens:
-            errors.append(f"sample_data {sd.token} missing calibrated_sensor {sd.calibrated_sensor_token}")
+            errors.append(
+                f"sample_data {sd.token} missing calibrated_sensor {sd.calibrated_sensor_token}"
+            )
     # calibrated_sensor -> sensor
     for c in tables.calibrated_sensor:
         if c.sensor_token not in sensor_tokens:
-            errors.append(f"calibrated_sensor {c.token} missing sensor {c.sensor_token}")
+            errors.append(
+                f"calibrated_sensor {c.token} missing sensor {c.sensor_token}"
+            )
     # instance checks / annotation linkage
     ann_by_instance: Dict[str, List[str]] = {}
     ann_first_last: Dict[str, List[str]] = {}
     for ann in tables.sample_annotation:
         if ann.instance_token not in instance_tokens:
-            errors.append(f"sample_annotation {ann.token} missing instance {ann.instance_token}")
+            errors.append(
+                f"sample_annotation {ann.token} missing instance {ann.instance_token}"
+            )
         if ann.visibility_token not in visibility_tokens:
-            errors.append(f"sample_annotation {ann.token} missing visibility {ann.visibility_token}")
+            errors.append(
+                f"sample_annotation {ann.token} missing visibility {ann.visibility_token}"
+            )
         for atok in ann.attribute_tokens:
             if atok not in attribute_tokens:
                 errors.append(f"sample_annotation {ann.token} missing attribute {atok}")
         ann_by_instance.setdefault(ann.instance_token, []).append(ann.token)
     for inst in tables.instance:
         if inst.category_token not in category_tokens:
-            errors.append(f"instance {inst.token} missing category {inst.category_token}")
+            errors.append(
+                f"instance {inst.token} missing category {inst.category_token}"
+            )
         lst = ann_by_instance.get(inst.token, [])
         if inst.nbr_annotations != len(lst):
-            errors.append(f"instance {inst.token} nbr_annotations mismatch {inst.nbr_annotations}!={len(lst)}")
+            errors.append(
+                f"instance {inst.token} nbr_annotations mismatch {inst.nbr_annotations}!={len(lst)}"
+            )
         if lst:
             if inst.first_annotation_token not in annotation_tokens:
-                errors.append(f"instance {inst.token} first_annotation missing {inst.first_annotation_token}")
+                errors.append(
+                    f"instance {inst.token} first_annotation missing {inst.first_annotation_token}"
+                )
             if inst.last_annotation_token not in annotation_tokens:
-                errors.append(f"instance {inst.token} last_annotation missing {inst.last_annotation_token}")
+                errors.append(
+                    f"instance {inst.token} last_annotation missing {inst.last_annotation_token}"
+                )
     return errors

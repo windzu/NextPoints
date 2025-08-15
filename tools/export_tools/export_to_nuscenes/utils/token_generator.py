@@ -1,21 +1,26 @@
 """
 Token generator for NuScenes format
 """
+
 import uuid
 import hashlib
 from typing import Union
 
 
-def generate_uuid_from_input(input_str: str) -> str:
-    """
-    Generate deterministic UUID from input string
-    Based on roscenes implementation
-    """
-    # Create SHA256 hash of input
-    hash_bytes = hashlib.sha256(input_str.encode('utf-8')).digest()
-    
-    # Use first 16 bytes to create UUID
-    return str(uuid.UUID(bytes=hash_bytes[:16]))
+# def generate_uuid_from_input(input_str: str) -> str:
+#     """
+#     Generate deterministic UUID from input string
+#     Based on roscenes implementation
+#     """
+#     # Create SHA256 hash of input
+#     hash_bytes = hashlib.sha256(input_str.encode('utf-8')).digest()
+#
+#     # Use first 16 bytes to create UUID
+#     return str(uuid.UUID(bytes=hash_bytes[:16]))
+
+
+def generate_uuid_from_input(input_string: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, input_string).hex)
 
 
 def generate_scene_token(scene_name: str) -> str:
@@ -33,12 +38,16 @@ def generate_sample_token(scene_name: str, timestamp: Union[str, int]) -> str:
     return generate_uuid_from_input(f"sample-{scene_name}-{timestamp}")
 
 
-def generate_sample_data_token(scene_name: str, timestamp: Union[str, int], channel: str) -> str:
+def generate_sample_data_token(
+    scene_name: str, timestamp: Union[str, int], channel: str
+) -> str:
     """Generate sample_data token"""
     return generate_uuid_from_input(f"sample_data-{scene_name}-{timestamp}-{channel}")
 
 
-def generate_annotation_token(scene_name: str, timestamp: Union[str, int], obj_id: str) -> str:
+def generate_annotation_token(
+    scene_name: str, timestamp: Union[str, int], obj_id: str
+) -> str:
     """Generate sample_annotation token"""
     return generate_uuid_from_input(f"annotation-{scene_name}-{timestamp}-{obj_id}")
 
