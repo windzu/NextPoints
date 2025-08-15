@@ -1,0 +1,21 @@
+from enum import Enum
+
+
+class ServiceType(str, Enum):
+    PRE_ANNOTATION = "PRE_ANNOTATION"
+    RECONSTRUCTION = "RECONSTRUCTION"
+    CALIBRATION = "CALIBRATION"
+
+
+class ErrorCode(str, Enum):
+    VALIDATION = "VALIDATION"
+    INTERNAL = "INTERNAL"
+    TIMEOUT = "TIMEOUT"
+    UNSUPPORTED = "UNSUPPORTED"
+    AUTH = "AUTH"
+
+
+class ArtifactType(str, Enum):
+    POINT_CLOUD_MAP = "POINT_CLOUD_MAP"
+    CALIB_REPORT = "CALIB_REPORT"
+    CALIB_DATA = "CALIB_DATA"
