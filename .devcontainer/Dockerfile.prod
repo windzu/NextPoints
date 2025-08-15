@@ -1,0 +1,60 @@
+# .devcontainer/Dockerfile.prod
+
+# --- 第一阶段: 构建阶段 (Builder Stage) ---
+# 使用一个包含完整构建工具的镜像来安装依赖
+FROM python:3.8-slim as builder
+
+# 设置环境变量，避免交互式提示
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 安装编译所需的依赖
+RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev build-essential
+
+# 创建一个专门存放依赖的目录
+WORKDIR /install
+
+# 复制 requirements.txt 并安装依赖到指定目录
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix="/install" -r requirements.txt
+
+
+# --- 第二阶段: 生产阶段 (Final Stage) ---
+# 使用一个干净、轻量的基础镜像
+FROM python:3.8-slim
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive \
+    # 确保 Python 输出是无缓冲的，日志可以实时看到
+    PYTHONUNBUFFERED=1 \
+    # 将我们安装的依赖包路径加入到 PYTHONPATH
+    PYTHONPATH=/install/lib/python3.8/site-packages
+
+# 安装运行时的系统依赖 (注意：这里不再安装 gcc, build-essential)
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 redis-server \
+    # 清理 apt 缓存，减小镜像体积
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# 创建一个非 root 用户和组
+# 使用 1001 是一个常见的约定，避免与系统用户冲突
+RUN groupadd -g 1001 appgroup && \
+    useradd -u 1001 -g appgroup -s /bin/sh -m appuser
+
+# 设置工作目录
+WORKDIR /app
+
+# 从构建阶段复制已安装的 Python 依赖
+COPY --from=builder /install /install
+
+# 复制应用程序代码到工作目录
+# 注意： .dockerignore 文件会在这里生效
+COPY . .
+
+# 将工作目录的所有权交给新创建的用户
+RUN chown -R appuser:appgroup /app
+
+# 切换到非 root 用户
+USER appuser
+
+# 容器启动时要执行的命令
+# 将 "python3 main.py" 替换为您应用的实际启动命令
+CMD ["python3", "main.py"]

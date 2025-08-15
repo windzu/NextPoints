@@ -1,0 +1,52 @@
+# docker-compose.prod.yml
+
+version: "3.8"
+
+services:
+  nextpoints:
+    container_name: nextpoints-prod
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile.prod
+    # 不再使用绑定挂载，代码已经包含在镜像里
+    # volumes:
+    #   - ./:/workspace
+
+    # 移除开发用的 command, tty, stdin_open
+    # command: bash
+    # stdin_open: true
+    # tty: true
+
+    # 配置端口映射
+    ports:
+      - "10080:10080" # 假设你的应用在容器内监听 10080 端口
+
+    # 总是重启，除非手动停止
+    restart: unless-stopped
+
+    # 通过 env_file 加载生产环境变量，更安全
+    # env_file:
+    #   - .env.prod
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:6-alpine # 使用 alpine 版本体积更小
+    container_name: nextpoints-redis-prod
+    restart: unless-stopped
+    # 生产环境建议为 Redis 设置数据持久化
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# 定义一个具名卷用于 Redis 数据持久化
+volumes:
+  redis_data:
