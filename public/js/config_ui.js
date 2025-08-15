@@ -267,13 +267,15 @@ class ConfigUi {
         "#cfg-calib-camera-LiDAR",
         "#cfg-experimental",
         "#cfg-data",
-        "#cfg-update-project-status", // keep submenu open
+        "#cfg-update-project-status",
+        "#cfg-export", // new export submenu root
     ];
 
     subMenus = [
         "#cfg-experimental",
         "#cfg-data",
         "#cfg-update-project-status",
+        "#cfg-export", // export submenu
     ];
 
     constructor(button, wrapper, editor) {
@@ -399,6 +401,45 @@ class ConfigUi {
                     } catch (err) {
                         console.error('Update status failed', err);
                         this.editor.infoBox.show('Error', `更新失败: ${err.message}`);
+                    }
+                };
+            });
+        }
+
+        // After other submenu bindings, bind export submenu option clicks
+        const exportSub = this.menu.querySelector('#cfg-export-submenu');
+        if (exportSub) {
+            exportSub.querySelectorAll('.export-option').forEach(opt => {
+                opt.onclick = async (e) => {
+                    e.stopPropagation();
+                    const target = opt.getAttribute('data-export-format');
+                    const header = this.editor.header;
+                    const projectName = header.getSelectedProjectName?.();
+                    if (!projectName) {
+                        this.editor.infoBox.show('Notice', '请先选择一个项目 (Select a project first)');
+                        return;
+                    }
+                    if (target === 'kitti') {
+                        this.editor.infoBox.show('Notice', 'KITTI export not implemented yet');
+                        return;
+                    }
+                    // nuscenes export
+                    try {
+                        const body = { export_format: 'nuscenes_v1.0' };
+                        const resp = await fetch(`/api/projects/${encodeURIComponent(projectName)}/export/nuscenes`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        });
+                        if (!resp.ok) {
+                            const txt = await resp.text();
+                            throw new Error(`HTTP ${resp.status}: ${txt}`);
+                        }
+                        const task = await resp.json();
+                        this.editor.infoBox.show('Success', `NuScenes export task created: ${task.task_id}`);
+                    } catch (err) {
+                        console.error('Export failed', err);
+                        this.editor.infoBox.show('Error', `Export failed: ${err.message}`);
                     }
                 };
             });

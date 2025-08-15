@@ -776,12 +776,6 @@ dynamic set obj-type css has higher priority than this one.
 	z-index: 1; /* TODO Solve this in HTML */
 }
 
-#view-manipulator:hover{
-	/* border-color: yellow; */
-	
-}
-
-
 .ew-handle:hover{
 	cursor: ew-resize;
 }
@@ -1080,3 +1074,15 @@ td {
 #cfg-update-project-status-submenu .menu-item {
     white-space: nowrap;
 }
+
+#cfg-export-submenu {
+    display: none;
+    position: absolute;
+    right: 100%;
+    top: 0%;
+    padding-left: 3px;
+    min-width: 180px;
+    background-color: var(--widget-background-color);
+    z-index: 25;
+}
+#cfg-export-submenu .menu-item { white-space: nowrap; }
