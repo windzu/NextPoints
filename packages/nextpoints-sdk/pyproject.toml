@@ -39,7 +39,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 
 [tool.setuptools.package-data]
 "nextpoints_sdk" = ["py.typed"]

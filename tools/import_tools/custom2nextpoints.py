@@ -1,10 +1,11 @@
 # tools/import_tools/custom2nextpoints.py
 
 import os
-from app.services.s3_service import S3Service
-from app.models.calibration_model import CalibrationMetadata
-from tools.utils import find_nearest_timestamp, fuse_pointclouds
 from rich import progress
+from nextpoints_sdk.models.calibration import CalibrationMetadata
+
+from app.services.s3_service import S3Service
+from tools.utils import find_nearest_timestamp, fuse_pointclouds
 
 
 def custom2nextpoints(

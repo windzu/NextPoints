@@ -1,16 +1,14 @@
 from sqlmodel import Session
 from fastapi import APIRouter, HTTPException, Depends, status
-from collections import defaultdict
-import posixpath
 from pathlib import Path
 import logging
 from typing import Dict, Any, Optional, List, Set, Tuple
-from botocore.exceptions import ClientError
 from sqlmodel import select
 import os
 import redis
 from celery.result import AsyncResult
 from datetime import datetime
+from nextpoints_sdk.models.annotation import AnnotationItem, FrameAnnotation
 
 
 from app.services.s3_service import S3Service
@@ -22,7 +20,6 @@ from app.models.project_model import (
     ProjectStatus,
     DataSourceType,
 )
-from app.models.annotation_model import AnnotationItem, FrameAnnotation
 from app.models.status_model import TaskStatus
 
 from app.database import get_session

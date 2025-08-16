@@ -5,11 +5,12 @@ from scipy.spatial.transform import Rotation as R
 from rich import progress
 from copy import deepcopy
 from typing import List, Dict, Any, Optional
+from nextpoints_sdk.models.calibration import CalibrationMetadata
+from nextpoints_sdk.models.annotation import AnnotationItem
+from nextpoints_sdk.models.pose import Pose
+
 
 from app.services.s3_service import S3Service
-from app.models.calibration_model import CalibrationMetadata
-from app.models.annotation_model import AnnotationItem
-from app.models.base_model import Pose
 from tools.utils import find_nearest_timestamp
 
 

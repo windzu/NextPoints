@@ -1,10 +1,7 @@
-import json
-import os
-import sys
 import numpy as np
-from typing import List, Optional, Dict, Union
+from typing import List
 
-from app.models.annotation_model import FrameAnnotation, AnnotationItem, PSR
+from nextpoints_sdk.models.annotation import FrameAnnotation
 
 
 def get_labels():
@@ -56,8 +53,6 @@ def get_labels():
     for k in labels_dict:
         for kk in labels_dict[k]:
             labels_list.extend(labels_dict[k][kk])
-
-
 
     return labels_list
 
@@ -245,6 +240,3 @@ class LabelChecker:
         self.check_one_obj(lambda id, o: self.check_obj_size(id, o))
         self.check_one_obj(lambda id, o: self.check_obj_direction(id, o))
         self.check_one_obj(lambda id, o: self.check_obj_type_consistency(id, o))
-
-
-

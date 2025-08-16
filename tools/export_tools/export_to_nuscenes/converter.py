@@ -8,10 +8,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import binascii
+from nextpoints_sdk.models.project_metadata import (
+    ProjectMetadataResponse,
+    FrameMetadata,
+)
+from nextpoints_sdk.models.annotation import AnnotationItem
 
-from app.models.meta_data_model import ProjectMetadataResponse, FrameMetadata
 from app.models.export_model import NuScenesExportRequest
-from app.models.annotation_model import AnnotationItem
 
 from .schema import InstanceTracker  # remaining tracker after migration
 from .schema.pydantic_models import (

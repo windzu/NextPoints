@@ -17,15 +17,18 @@ from celery.exceptions import Retry
 from sqlmodel import SQLModel, create_engine, Session, select
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from nextpoints_sdk.models.annotation import AnnotationItem
+
 # 注意：这里需要导入你实际的 celery_app
 from app.celery_app import celery_app
 from app.models.export_model import ExportStatus, NuScenesExportRequest
-from app.models.annotation_model import AnnotationItem
 from app.database import get_session
 
 from app.services.s3_service import S3Service
 from app.models.export_model import NuScenesExportRequest
-from app.models.meta_data_model import ProjectMetadataResponse
+
+# from app.models.meta_data_model import ProjectMetadataResponse
+from nextpoints_sdk.models.project_metadata import ProjectMetadataResponse
 from app.models.project_model import Project
 
 from tools.export_tools.export_to_nuscenes import NextPointsToNuScenesConverter

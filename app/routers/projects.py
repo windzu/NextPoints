@@ -4,6 +4,9 @@ from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
 import logging
 
+from nextpoints_sdk.models.project_metadata import ProjectMetadataResponse
+from nextpoints_sdk.models.annotation import FrameAnnotation
+
 from app.models.project_model import Project
 from app.database import get_session
 
@@ -14,8 +17,8 @@ from app.models.project_model import (
     ProjectStatus,
     ProjectCreateResponse,
 )
-from app.models.meta_data_model import ProjectMetadataResponse
-from app.models.annotation_model import FrameAnnotation
+
+
 from app.models.export_model import (
     NuScenesExportRequest,
     ExportTaskResponse,
