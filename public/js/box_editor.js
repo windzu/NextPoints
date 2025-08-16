@@ -1451,10 +1451,10 @@ function BoxEditorManager(parentUi, viewManager, objectTrackView,
             try {
                 updateStatusBtn.style.opacity = '0.5';
                 updateStatusBtn.style.pointerEvents = 'none';
-                const resp = await fetch(`/api/projects/${encodeURIComponent(projectName)}/status`, {
+                const resp = await fetch(`/api/projects/update_project_status`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: choice })
+                    body: JSON.stringify({ project_name: projectName, status: choice })
                 });
                 if (!resp.ok) {
                     const msg = await resp.text();

@@ -20,9 +20,6 @@ from app.database import get_session
 from app.models.export_model import (
     NuScenesExportRequest,
     ExportTaskResponse,
-    ExportTaskStatus,
-    ExportStatus,
-    ExportTaskList,
 )
 
 from app.services import project_service
@@ -188,15 +185,19 @@ async def get_label_check(project_name: str, session: Session = Depends(get_sess
         )
 
 
-@router.put("/{project_name}/status", response_model=ProjectResponse)
+@router.put("/update_project_status", response_model=ProjectResponse)
 async def update_project_status(
-    project_name: str,
     request: ProjectStatusUpdateRequest,
     session: Session = Depends(get_session),
 ):
     """
     更新项目状态
     """
+    project_name = request.project_name
+    if not project_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Project name is required"
+        )
     project = session.exec(select(Project).where(Project.name == project_name)).first()
 
     if not project:

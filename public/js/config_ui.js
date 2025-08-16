@@ -376,10 +376,10 @@ class ConfigUi {
                         return;
                     }
                     try {
-                        const resp = await fetch(`/api/projects/${encodeURIComponent(projectName)}/status`, {
+                        const resp = await fetch(`/api/projects/update_project_status`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ status })
+                            body: JSON.stringify({ project_name: projectName, status: status })
                         });
                         if (!resp.ok) {
                             const msg = await resp.text();

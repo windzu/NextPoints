@@ -74,4 +74,5 @@ class ProjectResponse(BaseModel):
 class ProjectStatusUpdateRequest(BaseModel):
     """项目状态更新请求模型"""
 
+    project_name: str
     status: ProjectStatusEnum
