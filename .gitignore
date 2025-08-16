@@ -12,4 +12,17 @@ celerybeat-schedule.db
 *.celerybeat
 !data/example/
 
+egg.info/
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+*.tar.gz
+*.zip
+*.db
+*.sqlite3
+*.log
+*.pid
+
 dump.rdb
