@@ -9,19 +9,16 @@ import redis
 from celery.result import AsyncResult
 from datetime import datetime
 from nextpoints_sdk.models.annotation import AnnotationItem, FrameAnnotation
+from nextpoints_sdk.models.project import (
+    ProjectCreateRequest,
+    ProjectResponse,
+    ProjectCreateResponse,
+)
+from nextpoints_sdk.models.enums import TaskStatusEnum, ProjectStatusEnum
+from nextpoints_sdk.models.project import Project
 
 
 from app.services.s3_service import S3Service
-from app.models.project_model import (
-    Project,
-    ProjectResponse,
-    ProjectCreateResponse,
-    ProjectCreateRequest,
-    ProjectStatus,
-    DataSourceType,
-)
-from app.models.status_model import TaskStatus
-
 from app.database import get_session
 
 from tools.check_label import LabelChecker
@@ -48,7 +45,7 @@ def get_task_status(task_id: str, project_name: str) -> ProjectCreateResponse:
         print(f"Error in get_task_status: {e}")
         return ProjectCreateResponse(
             project_name=project_name,
-            status=TaskStatus.FAILED,
+            status=TaskStatusEnum.FAILED,
             message=f"获取任务状态失败: {str(e)}",
         )
 
@@ -70,7 +67,7 @@ def create_project(
         if project:
             return ProjectCreateResponse(
                 project_name=project_name,
-                status=TaskStatus.COMPLETED,
+                status=TaskStatusEnum.COMPLETED,
                 message=f"Project '{project_name}' already exists",
             )
 
@@ -95,7 +92,7 @@ def create_project(
             if not success:
                 return ProjectCreateResponse(
                     project_name=project_name,
-                    status=TaskStatus.FAILED,
+                    status=TaskStatusEnum.FAILED,
                     message=f"Export task for project '{project_name}' already exists",
                 )
 
@@ -104,7 +101,7 @@ def create_project(
 
             return ProjectCreateResponse(
                 project_name=project_name,
-                status=TaskStatus.PENDING,
+                status=TaskStatusEnum.PENDING,
                 message=f"Create task created for project '{project_name}'",
             )
 
@@ -235,7 +232,7 @@ def save_world_list(
                 s3_service.upload_json_object(
                     bucket_name=project.bucket_name,
                     key=label_key,
-                    data_dict=item.to_dict()["annotation"],
+                    data=item.annotation.model_dump(exclude_none=True),
                 )
 
                 saved_count += 1

@@ -7,18 +7,18 @@ import redis
 from sqlmodel import select
 from fastapi import HTTPException, status
 
+from nextpoints_sdk.models.project import ProjectCreateRequest, Project
+from nextpoints_sdk.models.enums import (
+    ProjectDataSourceType,
+    ProjectStatusEnum,
+    TaskStatusEnum,
+)
+
 # 注意：这里需要导入你实际的 celery_app
 from app.celery_app import celery_app
 from app.database import get_session
 
 from app.services.s3_service import S3Service
-from app.models.project_model import (
-    Project,
-    ProjectCreateRequest,
-    ProjectStatus,
-    DataSourceType,
-)
-from app.models.status_model import TaskStatus
 
 from tools.export_tools.export_to_nuscenes import NextPointsToNuScenesConverter
 from tools.import_tools.custom2nextpoints import custom2nextpoints
@@ -73,10 +73,10 @@ def create_project_task(self, create_request: dict) -> Dict[str, Any]:
             # judge if data_source_type is custom or nextpoints
             # 判断数据源类型是 custom 还是 nextpoints
             bucket_prefix = os.path.join(request.project_name, "nextpoints")
-            if request.data_source_type == DataSourceType.CUSTOM:
+            if request.data_source_type == ProjectDataSourceType.CUSTOM:
                 print("Using custom2nextpoints to generate nextpoints...")
                 self.update_state(
-                    state=TaskStatus.PROCESSING,
+                    state=TaskStatusEnum.PROCESSING,
                     meta={
                         "message": "Using custom2nextpoints to generate nextpoints..."
                     },
@@ -88,10 +88,10 @@ def create_project_task(self, create_request: dict) -> Dict[str, Any]:
                     main_channel=request.main_channel,
                     time_interval_s=request.time_interval,
                 )
-            elif request.data_source_type == DataSourceType.SUS:
+            elif request.data_source_type == ProjectDataSourceType.SUS:
                 print("Using sus2nextpoints to generate nextpoints...")
                 self.update_state(
-                    state=TaskStatus.PROCESSING,
+                    state=TaskStatusEnum.PROCESSING,
                     meta={"message": "Using sus2nextpoints to generate nextpoints..."},
                 )
                 sus2nextpoints(
@@ -99,9 +99,9 @@ def create_project_task(self, create_request: dict) -> Dict[str, Any]:
                     bucket=request.bucket_name,
                     s3_service=s3_service,
                 )
-            elif request.data_source_type == DataSourceType.NEXTPOINTS:
+            elif request.data_source_type == ProjectDataSourceType.NEXTPOINTS:
                 self.update_state(
-                    state=TaskStatus.PROCESSING,
+                    state=TaskStatusEnum.PROCESSING,
                     meta={"message": "Direct using nextpoints..."},
                 )
                 print("Direct using nextpoints...")
@@ -112,7 +112,7 @@ def create_project_task(self, create_request: dict) -> Dict[str, Any]:
                 )
             # 2. 创建项目记录
             self.update_state(
-                state=TaskStatus.PROCESSING,
+                state=TaskStatusEnum.PROCESSING,
                 meta={"message": "Creating project record in database..."},
             )
             project = Project(
@@ -127,7 +127,7 @@ def create_project_task(self, create_request: dict) -> Dict[str, Any]:
                 secret_access_key=request.secret_access_key,
                 use_presigned_urls=request.use_presigned_urls,
                 expiration_minutes=request.expiration_minutes,
-                status=ProjectStatus.unstarted,  # 初始状态为未开始
+                status=ProjectStatusEnum.unstarted,  # 初始状态为未开始
             )
 
             session.add(project)
@@ -135,7 +135,7 @@ def create_project_task(self, create_request: dict) -> Dict[str, Any]:
 
             # 3. use get_project_metadata to check project metadata
             self.update_state(
-                state=TaskStatus.PROCESSING,
+                state=TaskStatusEnum.PROCESSING,
                 meta={"message": "Fetching project metadata..."},
             )
             get_project_metadata(project.name, session)
@@ -144,12 +144,12 @@ def create_project_task(self, create_request: dict) -> Dict[str, Any]:
 
             # 4. return project response
             return {
-                "status": TaskStatus.COMPLETED,
+                "status": TaskStatusEnum.COMPLETED,
                 "message": "Create project completed successfully",
             }
         except Exception as exc:
             session.rollback()
-            self.update_state(state=TaskStatus.FAILED, meta={"message": str(exc)})
+            self.update_state(state=TaskStatusEnum.FAILED, meta={"message": str(exc)})
             raise exc
         finally:
             redis_key = f"create_project_task:{project_name}"

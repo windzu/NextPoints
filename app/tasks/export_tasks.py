@@ -29,7 +29,7 @@ from app.models.export_model import NuScenesExportRequest
 
 # from app.models.meta_data_model import ProjectMetadataResponse
 from nextpoints_sdk.models.project_metadata import ProjectMetadataResponse
-from app.models.project_model import Project
+from nextpoints_sdk.models.project import Project
 
 from tools.export_tools.export_to_nuscenes import NextPointsToNuScenesConverter
 from tools.project_metadata import get_project_metadata

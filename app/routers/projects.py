@@ -6,17 +6,15 @@ import logging
 
 from nextpoints_sdk.models.project_metadata import ProjectMetadataResponse
 from nextpoints_sdk.models.annotation import FrameAnnotation
-
-from app.models.project_model import Project
-from app.database import get_session
-
-from app.models.project_model import (
-    ProjectResponse,
+from nextpoints_sdk.models.project import (
     ProjectCreateRequest,
+    ProjectResponse,
     ProjectStatusUpdateRequest,
-    ProjectStatus,
-    ProjectCreateResponse,
 )
+from nextpoints_sdk.models.enums import ProjectStatusEnum
+from nextpoints_sdk.models.project import Project, ProjectCreateResponse
+
+from app.database import get_session
 
 
 from app.models.export_model import (
@@ -91,7 +89,7 @@ async def save_world_list(
 
 @router.get("/list_projects", response_model=List[ProjectResponse])
 async def list_projects(
-    status_filter: Optional[ProjectStatus] = None,
+    status_filter: Optional[ProjectStatusEnum] = None,
     session: Session = Depends(get_session),
 ):
     """

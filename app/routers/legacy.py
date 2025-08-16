@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 import logging
 
 from nextpoints_sdk.models.annotation import AnnotationItem
+from nextpoints_sdk.models.project import Project
 
 from algos import pre_annotate
 from app.models.legacy_model import PointCloudRequest, FrameRequest
 from app.services.s3_service import S3Service
-from app.models.project_model import Project
 from app.database import get_session
 
 router = APIRouter()

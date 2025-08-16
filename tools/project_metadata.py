@@ -13,9 +13,10 @@ from nextpoints_sdk.models.project_metadata import (
 from nextpoints_sdk.models.calibration import CalibrationMetadata
 from nextpoints_sdk.models.pose import Pose
 from nextpoints_sdk.models.annotation import AnnotationItem
+from nextpoints_sdk.models.enums import ProjectStatusEnum
+from nextpoints_sdk.models.project import Project, ProjectResponse
 
 from app.services.s3_service import S3Service
-from app.models.project_model import Project, ProjectResponse, ProjectStatus
 
 
 from app.database import get_session
@@ -109,7 +110,7 @@ def _generate_project_meta_data(
             id=project.id,
             name=project.name,
             description=project.description,
-            status=ProjectStatus(project.status),
+            status=ProjectStatusEnum(project.status),
             created_at=project.created_at.isoformat(),
         )
 

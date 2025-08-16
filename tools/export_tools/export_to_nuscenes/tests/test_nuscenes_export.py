@@ -2,9 +2,6 @@
 Test script for NuScenes export functionality using nuscenes-devkit
 """
 
-import os
-import tempfile
-import shutil
 from pathlib import Path
 from typing import Dict, Any
 
@@ -23,6 +20,8 @@ from nextpoints_sdk.models.calibration import (
     CalibrationMetadata,
     CameraConfig,
 )
+from nextpoints_sdk.models.project import ProjectResponse
+from nextpoints_sdk.models.enums import ProjectStatusEnum
 
 # Import converter
 from tools.export_tools.export_to_nuscenes.converter import (
@@ -33,7 +32,6 @@ from tools.export_tools.export_to_nuscenes.converter import (
 # Mock data for testing
 def create_mock_project_metadata():
     """Create mock project metadata for testing"""
-    from app.models.project_model import ProjectResponse, ProjectStatus
 
     # Mock project
     project = ProjectResponse(
@@ -41,7 +39,7 @@ def create_mock_project_metadata():
         name="test_project",
         description="Test project for NuScenes export",
         created_at="2025-08-07T00:00:00Z",
-        status=ProjectStatus.completed,
+        status=ProjectStatusEnum.completed,
     )
 
     # Mock calibration
@@ -49,8 +47,19 @@ def create_mock_project_metadata():
         width=1920,
         height=1080,
         model="pinhole",
-        intrinsic=[[1000.0, 0.0, 960.0], [0.0, 1000.0, 540.0], [0.0, 0.0, 1.0]],
-        distortion_coefficients=[0.0, 0.0, 0.0, 0.0, 0.0],
+        intrinsic={
+            "fx": 1000.0,
+            "fy": 1000.0,
+            "cx": 960.0,
+            "cy": 540.0,
+        }
+        distortion_coefficients={
+            "k1": 0.1,
+            "k2": 0.01,
+            "p1": 0.001,
+            "p2": 0.001,
+            "k3": 0.0,
+        },
     )
 
     calibration = {
@@ -66,7 +75,6 @@ def create_mock_project_metadata():
             rotation=[1.0, 0.0, 0.0, 0.0],
         ),
     }
-
     # Mock frames
     frames = []
     for i in range(3):

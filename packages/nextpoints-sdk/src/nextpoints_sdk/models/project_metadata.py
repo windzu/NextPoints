@@ -2,11 +2,10 @@ from typing import Optional, List, Dict, Set
 from pydantic import BaseModel, model_validator
 
 
-from app.models.project_model import ProjectResponse
-
 from .annotation import AnnotationItem
 from .pose import Pose
 from .calibration import CalibrationMetadata, SensorType
+from .project import ProjectResponse
 
 
 class FrameMetadata(BaseModel):
