@@ -57,11 +57,16 @@ To run the development server, you can use:
    - Open the project in VSCode
    - Click on the green button in the bottom left corner and select "Reopen in Container"
    - This will set up the development environment automatically
-2. start the fastapi server
+2. install nextpoints-sdk with pip or dev install
+   ```bash
+   cd packages/nextpoints-sdk
+   pip install -e .
+   ```
+3. start the fastapi server
    ```bash
    uvicorn app.main:app --host 0.0.0.0 --port 10081 --reload
    ```
-3. start the celery worker
+4. start the celery worker
    ```bash
    celery -A app.celery_app worker --loglevel=info
    ```
